@@ -7,7 +7,7 @@ domain: io
 layout:
 - go.kubebuilder.io/v4
 projectName: hybrid-workflows-operator
-repo: github.com/PGpalt/Hybrid-Workflows-Operator
+repo: github.com/PGpalt/hybrid-workflows-operator
 resources:
 - api:
     crdVersion: v1
@@ -15,6 +15,6 @@ resources:
   domain: io
   group: hybridwf
   kind: HybridWorkflow
-  path: github.com/PGpalt/Hybrid-Workflows-Operator/api/v1alpha1
+  path: github.com/PGpalt/hybrid-workflows-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

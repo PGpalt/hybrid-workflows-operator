@@ -1,1 +1,1 @@
-# Hybrid-Workflows-Operator
+# Hybrid Workflows Operator

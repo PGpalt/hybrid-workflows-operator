@@ -19,7 +19,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	hybridwfv1alpha1 "github.com/PGpalt/Hybrid-Workflows-Operator/api/v1alpha1"
+	hybridwfv1alpha1 "github.com/PGpalt/hybrid-workflows-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

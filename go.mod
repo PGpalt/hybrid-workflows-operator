@@ -1,4 +1,4 @@
-module github.com/PGpalt/Hybrid-Workflows-Operator
+module github.com/PGpalt/hybrid-workflows-operator
 
 go 1.25.3
 

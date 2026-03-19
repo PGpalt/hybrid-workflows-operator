@@ -1,0 +1,262 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: hybridworkflows.hybridwf.io
+spec:
+  group: hybridwf.io
+  names:
+    kind: HybridWorkflow
+    listKind: HybridWorkflowList
+    plural: hybridworkflows
+    shortNames:
+    - hwf
+    singular: hybridworkflow
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.renderedWorkflowName
+      name: Workflow
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: HybridWorkflow stores the high-level DSL that is compiled into
+          an Argo Workflow.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: HybridWorkflowSpec defines the desired high-level hybrid
+              workflow definition.
+            properties:
+              jobs:
+                description: Jobs is the ordered list of hybrid workflow jobs.
+                items:
+                  description: |-
+                    HybridWorkflowJob is a single DSL job node that compiles into either an Argo
+                    template or a slurm templateRef task.
+                  properties:
+                    command:
+                      description: Command is passed to the shared slurm template
+                        and is required for slurm jobs.
+                      minLength: 1
+                      type: string
+                    inputs:
+                      description: Inputs are upstream references or literals used
+                        to build task arguments.
+                      items:
+                        description: HybridWorkflowInput is an upstream reference
+                          or literal used to build task arguments.
+                        properties:
+                          from:
+                            description: From is the upstream source in the form jobName
+                              or jobName.outputName.
+                            pattern: ^[A-Za-z0-9][A-Za-z0-9-]*(\\.[A-Za-z0-9][A-Za-z0-9_.-]*)?$
+                            type: string
+                          name:
+                            description: Name is the input name for k8s consumers
+                              and is ignored for slurm consumers.
+                            minLength: 1
+                            type: string
+                          path:
+                            description: Path is the local input file path paired
+                              with s3key for slurm jobs.
+                            minLength: 1
+                            type: string
+                          s3key:
+                            description: S3Key is a literal S3 key used only by slurm
+                              jobs.
+                            minLength: 1
+                            type: string
+                          type:
+                            default: parameter
+                            description: Type controls whether a k8s input consumes
+                              a parameter or an artifact.
+                            enum:
+                            - parameter
+                            - artifact
+                            type: string
+                          value:
+                            description: Value is a literal used only by k8s jobs.
+                            x-kubernetes-validations:
+                            - message: value must be a string, boolean, integer, or
+                                number
+                              rule: self == null || type(self) == string || type(self)
+                                == bool || type(self) == int || type(self) == double
+                        type: object
+                        x-kubernetes-validations:
+                        - message: input.path requires input.s3key
+                          rule: '!has(self.path) || has(self.s3key)'
+                      type: array
+                    jobSpec:
+                      description: JobSpec is an arbitrary Argo template fragment
+                        for k8s jobs.
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    name:
+                      description: Name is the unique job name inside the HybridWorkflow.
+                      minLength: 1
+                      pattern: ^[A-Za-z0-9][A-Za-z0-9-]*$
+                      type: string
+                    outputs:
+                      description: Outputs are extra named values propagated into
+                        slurm task parameters.
+                      items:
+                        description: HybridWorkflowOutput is an extra named value
+                          forwarded by the compiler.
+                        properties:
+                          name:
+                            description: Name is the output parameter name.
+                            minLength: 1
+                            type: string
+                          value:
+                            description: Value is the output value forwarded by the
+                              compiler.
+                            x-kubernetes-validations:
+                            - message: value must be a string, boolean, integer, or
+                                number
+                              rule: type(self) == string || type(self) == bool ||
+                                type(self) == int || type(self) == double
+                        required:
+                        - name
+                        - value
+                        type: object
+                      type: array
+                    template:
+                      description: Template is an optional template name override
+                        for k8s jobs.
+                      minLength: 1
+                      type: string
+                    type:
+                      description: Type is the execution backend for this job.
+                      enum:
+                      - k8s
+                      - slurm
+                      type: string
+                  required:
+                  - name
+                  - type
+                  type: object
+                  x-kubernetes-validations:
+                  - message: k8s jobs require jobSpec
+                    rule: self.type != 'k8s' || has(self.jobSpec)
+                  - message: slurm jobs require command
+                    rule: self.type != 'slurm' || has(self.command)
+                  - message: slurm jobs must not define jobSpec
+                    rule: self.type != 'slurm' || !has(self.jobSpec)
+                  - message: k8s inputs must have a name
+                    rule: self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i,
+                      has(i.name))
+                  - message: k8s inputs must not use s3key
+                    rule: self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i,
+                      !has(i.s3key))
+                  - message: k8s inputs must not use path
+                    rule: self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i,
+                      !has(i.path))
+                  - message: k8s inputs must define from or value
+                    rule: self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i,
+                      has(i.from) || has(i.value))
+                  - message: slurm inputs must not use value
+                    rule: self.type != 'slurm' || !has(self.inputs) || self.inputs.all(i,
+                      !has(i.value))
+                  - message: slurm inputs must define from or s3key
+                    rule: self.type != 'slurm' || !has(self.inputs) || self.inputs.all(i,
+                      has(i.from) || has(i.s3key))
+                  - message: slurm jobs may define at most one s3key input
+                    rule: self.type != 'slurm' || !has(self.inputs) || size(self.inputs.filter(i,
+                      has(i.s3key))) <= 1
+                minItems: 1
+                type: array
+            required:
+            - jobs
+            type: object
+          status:
+            description: HybridWorkflowStatus defines the observed state from the
+              controller and rendered Argo Workflow.
+            properties:
+              conditions:
+                description: Conditions represent the current reconciliation state.
+                items:
+                  description: HybridWorkflowCondition captures one status condition
+                    entry.
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    observedGeneration:
+                      format: int64
+                      type: integer
+                    reason:
+                      type: string
+                    status:
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: ObservedGeneration is the last reconciled generation.
+                format: int64
+                type: integer
+              phase:
+                description: Phase is the high-level state of the rendered workflow.
+                enum:
+                - Pending
+                - Rendering
+                - Rendered
+                - Submitted
+                - Running
+                - Succeeded
+                - Failed
+                - Error
+                type: string
+              renderedWorkflowName:
+                description: RenderedWorkflowName is the name of the Argo Workflow
+                  created from this resource.
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

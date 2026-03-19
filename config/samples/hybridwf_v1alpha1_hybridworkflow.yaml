@@ -1,0 +1,12 @@
+apiVersion: hybridwf.io/v1alpha1
+kind: HybridWorkflow
+metadata:
+  labels:
+    app.kubernetes.io/name: hybrid-workflows-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: hybridworkflow-sample
+spec:
+  jobs:
+  - name: sample-slurm
+    type: slurm
+    command: echo hello

@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- hybridwf_v1alpha1_hybridworkflow.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

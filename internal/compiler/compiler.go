@@ -267,13 +267,9 @@ func configureSlurmTask(
 		},
 	}
 	for _, output := range job.Outputs {
-		value, err := decodeJSON(output.Value)
-		if err != nil {
-			return fmt.Errorf("decode output %q for job %q: %w", output.Name, job.Name, err)
-		}
 		params = append(params, map[string]any{
 			"name":  output.Name,
-			"value": value,
+			"value": output.Value,
 		})
 	}
 	if slurmNeedsFetch && !hasOutput(job.Outputs, "fetchData") {
@@ -354,13 +350,9 @@ func processJobInputs(
 				if input.Path != "" {
 					return nil, fmt.Errorf("k8s job %q input %q uses path; this is only valid for slurm s3 inputs", job.Name, input.Name)
 				}
-				value, err := decodeJSON(*input.Value)
-				if err != nil {
-					return nil, fmt.Errorf("decode literal input %q for job %q: %w", input.Name, job.Name, err)
-				}
 				params = append(params, map[string]any{
 					"name":  input.Name,
-					"value": value,
+					"value": *input.Value,
 				})
 				continue
 			}
@@ -978,17 +970,6 @@ func decodeJSONObject(raw *apiextensionsv1.JSON) (map[string]any, error) {
 		return map[string]any{}, nil
 	}
 	var out map[string]any
-	if err := json.Unmarshal(raw.Raw, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func decodeJSON(raw apiextensionsv1.JSON) (any, error) {
-	if len(raw.Raw) == 0 {
-		return nil, nil
-	}
-	var out any
 	if err := json.Unmarshal(raw.Raw, &out); err != nil {
 		return nil, err
 	}

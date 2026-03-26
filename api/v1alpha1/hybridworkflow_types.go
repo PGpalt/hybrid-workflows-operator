@@ -47,13 +47,6 @@ type HybridWorkflowSpec struct {
 // +kubebuilder:validation:XValidation:rule="self.type != 'k8s' || has(self.jobSpec)",message="k8s jobs require jobSpec"
 // +kubebuilder:validation:XValidation:rule="self.type != 'slurm' || has(self.command)",message="slurm jobs require command"
 // +kubebuilder:validation:XValidation:rule="self.type != 'slurm' || !has(self.jobSpec)",message="slurm jobs must not define jobSpec"
-// +kubebuilder:validation:XValidation:rule="self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i, has(i.name))",message="k8s inputs must have a name"
-// +kubebuilder:validation:XValidation:rule="self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i, !has(i.s3key))",message="k8s inputs must not use s3key"
-// +kubebuilder:validation:XValidation:rule="self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i, !has(i.path))",message="k8s inputs must not use path"
-// +kubebuilder:validation:XValidation:rule="self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i, has(i.from) || has(i.value))",message="k8s inputs must define from or value"
-// +kubebuilder:validation:XValidation:rule="self.type != 'slurm' || !has(self.inputs) || self.inputs.all(i, !has(i.value))",message="slurm inputs must not use value"
-// +kubebuilder:validation:XValidation:rule="self.type != 'slurm' || !has(self.inputs) || self.inputs.all(i, has(i.from) || has(i.s3key))",message="slurm inputs must define from or s3key"
-// +kubebuilder:validation:XValidation:rule="self.type != 'slurm' || !has(self.inputs) || size(self.inputs.filter(i, has(i.s3key))) <= 1",message="slurm jobs may define at most one s3key input"
 type HybridWorkflowJob struct {
 	// Command is passed to the shared slurm template and is required for slurm jobs.
 	// +optional
@@ -94,7 +87,7 @@ type HybridWorkflowJob struct {
 type HybridWorkflowInput struct {
 	// From is the upstream source in the form jobName or jobName.outputName.
 	// +optional
-	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9][A-Za-z0-9-]*(\\.[A-Za-z0-9][A-Za-z0-9_.-]*)?$`
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9][A-Za-z0-9_.-]*)?$`
 	From string `json:"from,omitempty"`
 
 	// Name is the input name for k8s consumers and is ignored for slurm consumers.
@@ -120,9 +113,8 @@ type HybridWorkflowInput struct {
 
 	// Value is a literal used only by k8s jobs.
 	// +optional
-	// +kubebuilder:validation:Schemaless
-	// +kubebuilder:validation:XValidation:rule="self == null || type(self) == string || type(self) == bool || type(self) == int || type(self) == double",message="value must be a string, boolean, integer, or number"
-	Value *apiextensionsv1.JSON `json:"value,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	Value *string `json:"value,omitempty"`
 }
 
 // HybridWorkflowOutput is an extra named value forwarded by the compiler.
@@ -132,9 +124,8 @@ type HybridWorkflowOutput struct {
 	Name string `json:"name"`
 
 	// Value is the output value forwarded by the compiler.
-	// +kubebuilder:validation:Schemaless
-	// +kubebuilder:validation:XValidation:rule="type(self) == string || type(self) == bool || type(self) == int || type(self) == double",message="value must be a string, boolean, integer, or number"
-	Value apiextensionsv1.JSON `json:"value"`
+	// +kubebuilder:validation:MinLength=1
+	Value string `json:"value"`
 }
 
 // HybridWorkflowStatus defines the observed state from the controller and rendered Argo Workflow.

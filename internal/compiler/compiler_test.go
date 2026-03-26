@@ -54,7 +54,7 @@ func TestCompileBuildsWorkflowFromMixedJobs(t *testing.T) {
 						{From: "generate.file"},
 					},
 					Outputs: []hybridwfv1alpha1.HybridWorkflowOutput{
-						{Name: "outputFileName", Value: mustJSONValue(t, "mnist.log")},
+						{Name: "outputFileName", Value: "mnist.log"},
 					},
 				},
 				{
@@ -133,7 +133,7 @@ func TestCompileAddsCleanupTaskForDependentSlurmJobs(t *testing.T) {
 					Type:    hybridwfv1alpha1.HybridWorkflowJobTypeSlurm,
 					Command: "prepare",
 					Outputs: []hybridwfv1alpha1.HybridWorkflowOutput{
-						{Name: "cleanDataPath", Value: mustJSONValue(t, "shared-dir")},
+						{Name: "cleanDataPath", Value: "shared-dir"},
 					},
 				},
 				{
@@ -248,8 +248,8 @@ func TestCompileRejectsDuplicateK8sInputNames(t *testing.T) {
 						"container": map[string]any{"image": "busybox"},
 					}),
 					Inputs: []hybridwfv1alpha1.HybridWorkflowInput{
-						{Name: "message", Value: mustJSONPtr(t, "hello")},
-						{Name: "message", Value: mustJSONPtr(t, "world")},
+						{Name: "message", Value: stringPtr("hello")},
+						{Name: "message", Value: stringPtr("world")},
 					},
 				},
 			},
@@ -374,20 +374,6 @@ func mustJSON(t *testing.T, value any) *apiextensionsv1.JSON {
 	return &apiextensionsv1.JSON{Raw: raw}
 }
 
-func mustJSONValue(t *testing.T, value any) apiextensionsv1.JSON {
-	t.Helper()
-	raw, err := json.Marshal(value)
-	if err != nil {
-		t.Fatalf("marshal JSON value: %v", err)
-	}
-	return apiextensionsv1.JSON{Raw: raw}
-}
-
-func mustJSONPtr(t *testing.T, value any) *apiextensionsv1.JSON {
-	t.Helper()
-	raw, err := json.Marshal(value)
-	if err != nil {
-		t.Fatalf("marshal JSON pointer value: %v", err)
-	}
-	return &apiextensionsv1.JSON{Raw: raw}
+func stringPtr(value string) *string {
+	return &value
 }

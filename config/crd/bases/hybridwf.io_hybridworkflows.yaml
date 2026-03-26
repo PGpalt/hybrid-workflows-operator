@@ -75,7 +75,7 @@ spec:
                           from:
                             description: From is the upstream source in the form jobName
                               or jobName.outputName.
-                            pattern: ^[A-Za-z0-9][A-Za-z0-9-]*(\\.[A-Za-z0-9][A-Za-z0-9_.-]*)?$
+                            pattern: ^[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9][A-Za-z0-9_.-]*)?$
                             type: string
                           name:
                             description: Name is the input name for k8s consumers
@@ -102,11 +102,8 @@ spec:
                             type: string
                           value:
                             description: Value is a literal used only by k8s jobs.
-                            x-kubernetes-validations:
-                            - message: value must be a string, boolean, integer, or
-                                number
-                              rule: self == null || type(self) == string || type(self)
-                                == bool || type(self) == int || type(self) == double
+                            minLength: 1
+                            type: string
                         type: object
                         x-kubernetes-validations:
                         - message: input.path requires input.s3key
@@ -136,11 +133,8 @@ spec:
                           value:
                             description: Value is the output value forwarded by the
                               compiler.
-                            x-kubernetes-validations:
-                            - message: value must be a string, boolean, integer, or
-                                number
-                              rule: type(self) == string || type(self) == bool ||
-                                type(self) == int || type(self) == double
+                            minLength: 1
+                            type: string
                         required:
                         - name
                         - value
@@ -168,27 +162,6 @@ spec:
                     rule: self.type != 'slurm' || has(self.command)
                   - message: slurm jobs must not define jobSpec
                     rule: self.type != 'slurm' || !has(self.jobSpec)
-                  - message: k8s inputs must have a name
-                    rule: self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i,
-                      has(i.name))
-                  - message: k8s inputs must not use s3key
-                    rule: self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i,
-                      !has(i.s3key))
-                  - message: k8s inputs must not use path
-                    rule: self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i,
-                      !has(i.path))
-                  - message: k8s inputs must define from or value
-                    rule: self.type == 'slurm' || !has(self.inputs) || self.inputs.all(i,
-                      has(i.from) || has(i.value))
-                  - message: slurm inputs must not use value
-                    rule: self.type != 'slurm' || !has(self.inputs) || self.inputs.all(i,
-                      !has(i.value))
-                  - message: slurm inputs must define from or s3key
-                    rule: self.type != 'slurm' || !has(self.inputs) || self.inputs.all(i,
-                      has(i.from) || has(i.s3key))
-                  - message: slurm jobs may define at most one s3key input
-                    rule: self.type != 'slurm' || !has(self.inputs) || size(self.inputs.filter(i,
-                      has(i.s3key))) <= 1
                 minItems: 1
                 type: array
             required:

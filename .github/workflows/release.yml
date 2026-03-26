@@ -70,7 +70,7 @@ jobs:
       run: make build-installer IMG=${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.primary_tag }}
 
     - name: Upload installer artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: hybrid-workflows-operator-install
         path: dist/install.yaml

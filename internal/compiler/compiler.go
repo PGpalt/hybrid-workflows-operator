@@ -424,6 +424,10 @@ func processJobInputs(
 			continue
 		}
 
+		if jobHasS3Key {
+			continue
+		}
+
 		if sourceType == hybridwfv1alpha1.HybridWorkflowJobTypeSlurm {
 			params = append(params, map[string]any{
 				"name":  "slurmInput",
@@ -436,11 +440,14 @@ func processJobInputs(
 			continue
 		}
 
-		if jobHasS3Key {
+		resolved := resolveOutputName(sourceJob, outputName, jobsByName, true)
+		if s3Key := getOutputArtifactS3Key(jobsByName[sourceJob], resolved); s3Key != "" {
+			params = append(params, map[string]any{
+				"name":  "s3artifact",
+				"value": s3Key,
+			})
 			continue
 		}
-
-		resolved := resolveOutputName(sourceJob, outputName, jobsByName, true)
 		params = append(params, map[string]any{
 			"name":  "slurmInput",
 			"value": "false",
@@ -627,8 +634,12 @@ func validateAcyclic(jobDeps map[string]map[string]struct{}) error {
 }
 
 type k8sOutputInfo struct {
-	artifacts  map[string]struct{}
+	artifacts  map[string]k8sArtifactOutput
 	parameters map[string]struct{}
+}
+
+type k8sArtifactOutput struct {
+	s3Key string
 }
 
 func (info k8sOutputInfo) artifactCount() int {
@@ -734,10 +745,9 @@ func validateSlurmInputShape(job *hybridwfv1alpha1.HybridWorkflowJob) error {
 	}
 
 	if fromInputs > 1 {
-		return fmt.Errorf("slurm job %q may define at most one from input", job.Name)
-	}
-	if s3Inputs > 0 && fromInputs > 0 {
-		return fmt.Errorf("slurm job %q cannot mix s3key inputs with from inputs", job.Name)
+		if s3Inputs == 0 {
+			return fmt.Errorf("slurm job %q may define at most one from input when no s3key input is present", job.Name)
+		}
 	}
 
 	return nil
@@ -756,7 +766,7 @@ func validateUniqueSlurmOutputNames(job *hybridwfv1alpha1.HybridWorkflowJob) err
 
 func collectK8sOutputInfo(job *hybridwfv1alpha1.HybridWorkflowJob) (k8sOutputInfo, error) {
 	info := k8sOutputInfo{
-		artifacts:  map[string]struct{}{},
+		artifacts:  map[string]k8sArtifactOutput{},
 		parameters: map[string]struct{}{},
 	}
 	if job == nil || job.Type != hybridwfv1alpha1.HybridWorkflowJobTypeK8s || job.JobSpec == nil {
@@ -778,7 +788,7 @@ func collectK8sOutputInfo(job *hybridwfv1alpha1.HybridWorkflowJob) (k8sOutputInf
 		return info, fmt.Errorf("k8s job %q jobSpec.outputs must be an object", job.Name)
 	}
 
-	artifacts, err := collectNamedOutputEntries(outputs["artifacts"], "artifact", job.Name)
+	artifacts, err := collectArtifactOutputEntries(outputs["artifacts"], job.Name)
 	if err != nil {
 		return info, err
 	}
@@ -790,6 +800,45 @@ func collectK8sOutputInfo(job *hybridwfv1alpha1.HybridWorkflowJob) (k8sOutputInf
 	info.artifacts = artifacts
 	info.parameters = parameters
 	return info, nil
+}
+
+func collectArtifactOutputEntries(section any, jobName string) (map[string]k8sArtifactOutput, error) {
+	artifacts := map[string]k8sArtifactOutput{}
+	if section == nil {
+		return artifacts, nil
+	}
+
+	var items []any
+	switch typed := section.(type) {
+	case []any:
+		items = typed
+	case []map[string]any:
+		items = make([]any, 0, len(typed))
+		for i := range typed {
+			items = append(items, typed[i])
+		}
+	default:
+		return nil, fmt.Errorf("k8s job %q jobSpec.outputs.artifacts must be a list", jobName)
+	}
+
+	for i, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("k8s job %q jobSpec.outputs.artifacts[%d] must be an object", jobName, i)
+		}
+		name, ok := entry["name"].(string)
+		if !ok || name == "" {
+			return nil, fmt.Errorf("k8s job %q jobSpec.outputs.artifacts[%d] must define name", jobName, i)
+		}
+		if _, exists := artifacts[name]; exists {
+			return nil, fmt.Errorf("k8s job %q defines duplicate artifact output %q", jobName, name)
+		}
+		artifacts[name] = k8sArtifactOutput{
+			s3Key: extractArtifactS3Key(entry),
+		}
+	}
+
+	return artifacts, nil
 }
 
 func collectNamedOutputEntries(section any, kind, jobName string) (map[string]struct{}, error) {
@@ -827,6 +876,19 @@ func collectNamedOutputEntries(section any, kind, jobName string) (map[string]st
 	}
 
 	return names, nil
+}
+
+func extractArtifactS3Key(entry map[string]any) string {
+	s3Value, ok := entry["s3"]
+	if !ok {
+		return ""
+	}
+	s3Map, ok := s3Value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	key, _ := s3Map["key"].(string)
+	return key
 }
 
 func validateK8sInputReference(
@@ -880,6 +942,10 @@ func validateSlurmInputReference(
 	outputName string,
 	sourceOutputs k8sOutputInfo,
 ) error {
+	if slurmJobHasLiteralS3Input(job) {
+		return nil
+	}
+
 	if sourceType == hybridwfv1alpha1.HybridWorkflowJobTypeSlurm {
 		if outputName != "" && outputName != "output-artifact" {
 			return fmt.Errorf("slurm job %q input %q cannot reference slurm output %q from job %q; slurm jobs expose only output-artifact", job.Name, input.From, outputName, sourceJob)
@@ -913,6 +979,18 @@ func hasInlineContainerFields(spec map[string]any) bool {
 func hasOutput(outputs []hybridwfv1alpha1.HybridWorkflowOutput, name string) bool {
 	for _, output := range outputs {
 		if output.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func slurmJobHasLiteralS3Input(job *hybridwfv1alpha1.HybridWorkflowJob) bool {
+	if job == nil {
+		return false
+	}
+	for _, input := range job.Inputs {
+		if input.S3Key != "" {
 			return true
 		}
 	}
@@ -960,6 +1038,40 @@ func getSingleOutputArtifactName(job *hybridwfv1alpha1.HybridWorkflowJob) string
 	}
 	name, _ := artifact["name"].(string)
 	return name
+}
+
+func getOutputArtifactS3Key(job *hybridwfv1alpha1.HybridWorkflowJob, artifactName string) string {
+	if job == nil || job.Type != hybridwfv1alpha1.HybridWorkflowJobTypeK8s || job.JobSpec == nil {
+		return ""
+	}
+
+	jobSpec, err := decodeJSONObject(job.JobSpec)
+	if err != nil {
+		return ""
+	}
+
+	outputs, ok := jobSpec["outputs"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	artifacts, ok := outputs["artifacts"].([]any)
+	if !ok {
+		return ""
+	}
+
+	for _, item := range artifacts {
+		artifact, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := artifact["name"].(string)
+		if name != artifactName {
+			continue
+		}
+		return extractArtifactS3Key(artifact)
+	}
+
+	return ""
 }
 
 func decodeJSONObject(raw *apiextensionsv1.JSON) (map[string]any, error) {

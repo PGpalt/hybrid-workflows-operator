@@ -81,7 +81,7 @@ jobs:
       with:
         files: dist/install.yaml
 
-    - name: Promote image in GitOps repo
+    - name: Promote operator manifests in GitOps repo
       if: github.ref == 'refs/heads/main'
       env:
         GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
@@ -95,17 +95,20 @@ jobs:
         git clone "https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/PGpalt/hybrid-workflows-gitops.git" /tmp/hybrid-workflows-gitops
         cd /tmp/hybrid-workflows-gitops
 
-        image_file="apps/hybrid-workflows-operator/overlays/dev/image-patch.yaml"
+        overlay_file="apps/hybrid-workflows-operator/overlays/dev/kustomization.yaml"
+        installer_file="apps/hybrid-workflows-operator/base/install.yaml"
         image_ref="${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha_tag }}"
-        sed -i "s#^\([[:space:]]*image:[[:space:]]*\).*#\1${image_ref}#" "${image_file}"
 
-        if git diff --quiet -- "${image_file}"; then
-          echo "GitOps repo already points at ${image_ref}; nothing to do."
+        cp "${GITHUB_WORKSPACE}/dist/install.yaml" "${installer_file}"
+        sed -i "s#^\([[:space:]]*newTag:[[:space:]]*\).*#\1${{ steps.vars.outputs.sha_tag }}#" "${overlay_file}"
+
+        if git diff --quiet -- "${overlay_file}" "${installer_file}"; then
+          echo "GitOps repo already points at ${image_ref} with the latest installer manifest; nothing to do."
           exit 0
         fi
 
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add "${image_file}"
+        git add "${overlay_file}" "${installer_file}"
         git commit -m "chore(operator): promote hybrid-workflows-operator to ${{ steps.vars.outputs.sha_tag }}"
         git push origin HEAD:main

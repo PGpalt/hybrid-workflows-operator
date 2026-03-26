@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"maps"
 	"reflect"
 
 	argov1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
@@ -164,11 +165,7 @@ func mergeStringMaps(existing, desired map[string]string) map[string]string {
 		return nil
 	}
 	merged := map[string]string{}
-	for key, value := range existing {
-		merged[key] = value
-	}
-	for key, value := range desired {
-		merged[key] = value
-	}
+	maps.Copy(merged, existing)
+	maps.Copy(merged, desired)
 	return merged
 }

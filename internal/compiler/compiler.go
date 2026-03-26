@@ -21,24 +21,73 @@ func Compile(hw *hybridwfv1alpha1.HybridWorkflow) (*wfv1.Workflow, error) {
 		return nil, fmt.Errorf("spec.jobs must not be empty")
 	}
 
-	jobTypes := make(map[string]hybridwfv1alpha1.HybridWorkflowJobType, len(hw.Spec.Jobs))
-	jobsByName := make(map[string]*hybridwfv1alpha1.HybridWorkflowJob, len(hw.Spec.Jobs))
+	jobTypes, jobsByName, err := buildJobIndex(hw.Spec.Jobs)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateJobSemantics(jobTypes, jobsByName); err != nil {
+		return nil, err
+	}
 
-	for i := range hw.Spec.Jobs {
-		job := &hw.Spec.Jobs[i]
+	jobDeps, err := buildJobDependencies(hw.Spec.Jobs, jobsByName)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAcyclic(jobDeps); err != nil {
+		return nil, err
+	}
+
+	slurmJobNeeds := determineSlurmFetchNeeds(hw.Spec.Jobs, jobDeps)
+	workflow := newWorkflowSkeleton()
+
+	dagTasks, additionalTemplates, err := compileWorkflowTasks(hw.Spec.Jobs, jobDeps, slurmJobNeeds, jobTypes, jobsByName)
+	if err != nil {
+		return nil, err
+	}
+	populateWorkflowTemplates(workflow, dagTasks, additionalTemplates)
+
+	if err := applySlurmCleanup(workflow, hw.Spec.Jobs); err != nil {
+		return nil, err
+	}
+
+	raw, err := json.Marshal(workflow)
+	if err != nil {
+		return nil, fmt.Errorf("marshal compiled workflow: %w", err)
+	}
+
+	var compiled wfv1.Workflow
+	if err := json.Unmarshal(raw, &compiled); err != nil {
+		return nil, fmt.Errorf("unmarshal compiled workflow: %w", err)
+	}
+
+	return &compiled, nil
+}
+
+func buildJobIndex(
+	jobs []hybridwfv1alpha1.HybridWorkflowJob,
+) (map[string]hybridwfv1alpha1.HybridWorkflowJobType, map[string]*hybridwfv1alpha1.HybridWorkflowJob, error) {
+	jobTypes := make(map[string]hybridwfv1alpha1.HybridWorkflowJobType, len(jobs))
+	jobsByName := make(map[string]*hybridwfv1alpha1.HybridWorkflowJob, len(jobs))
+
+	for i := range jobs {
+		job := &jobs[i]
 		if _, exists := jobsByName[job.Name]; exists {
-			return nil, fmt.Errorf("duplicate job name: %s", job.Name)
+			return nil, nil, fmt.Errorf("duplicate job name: %s", job.Name)
 		}
 		jobTypes[job.Name] = job.Type
 		jobsByName[job.Name] = job
 	}
 
-	if err := validateJobSemantics(jobTypes, jobsByName); err != nil {
-		return nil, err
-	}
+	return jobTypes, jobsByName, nil
+}
 
-	jobDeps := make(map[string]map[string]struct{}, len(hw.Spec.Jobs))
-	for _, job := range hw.Spec.Jobs {
+func buildJobDependencies(
+	jobs []hybridwfv1alpha1.HybridWorkflowJob,
+	jobsByName map[string]*hybridwfv1alpha1.HybridWorkflowJob,
+) (map[string]map[string]struct{}, error) {
+	jobDeps := make(map[string]map[string]struct{}, len(jobs))
+
+	for _, job := range jobs {
 		jobDeps[job.Name] = map[string]struct{}{}
 		for _, input := range job.Inputs {
 			if input.From == "" {
@@ -53,17 +102,21 @@ func Compile(hw *hybridwfv1alpha1.HybridWorkflow) (*wfv1.Workflow, error) {
 		}
 	}
 
-	if err := validateAcyclic(jobDeps); err != nil {
-		return nil, err
-	}
+	return jobDeps, nil
+}
 
+func determineSlurmFetchNeeds(
+	jobs []hybridwfv1alpha1.HybridWorkflowJob,
+	jobDeps map[string]map[string]struct{},
+) map[string]bool {
 	slurmJobNeeds := make(map[string]bool)
-	for _, job := range hw.Spec.Jobs {
+	for _, job := range jobs {
 		if job.Type == hybridwfv1alpha1.HybridWorkflowJobTypeSlurm {
 			slurmJobNeeds[job.Name] = false
 		}
 	}
-	for _, job := range hw.Spec.Jobs {
+
+	for _, job := range jobs {
 		if job.Type == hybridwfv1alpha1.HybridWorkflowJobTypeSlurm {
 			continue
 		}
@@ -74,7 +127,11 @@ func Compile(hw *hybridwfv1alpha1.HybridWorkflow) (*wfv1.Workflow, error) {
 		}
 	}
 
-	workflow := map[string]any{
+	return slurmJobNeeds
+}
+
+func newWorkflowSkeleton() map[string]any {
+	return map[string]any{
 		"apiVersion": "argoproj.io/v1alpha1",
 		"kind":       "Workflow",
 		"metadata": map[string]any{
@@ -92,118 +149,154 @@ func Compile(hw *hybridwfv1alpha1.HybridWorkflow) (*wfv1.Workflow, error) {
 			},
 		},
 	}
+}
 
-	dagTasks := make([]any, 0, len(hw.Spec.Jobs))
-	additionalTemplates := make([]any, 0, len(hw.Spec.Jobs))
+func compileWorkflowTasks(
+	jobs []hybridwfv1alpha1.HybridWorkflowJob,
+	jobDeps map[string]map[string]struct{},
+	slurmJobNeeds map[string]bool,
+	jobTypes map[string]hybridwfv1alpha1.HybridWorkflowJobType,
+	jobsByName map[string]*hybridwfv1alpha1.HybridWorkflowJob,
+) ([]any, []any, error) {
+	dagTasks := make([]any, 0, len(jobs))
+	additionalTemplates := make([]any, 0, len(jobs))
 	usedTemplates := map[string]struct{}{}
 
-	for i := range hw.Spec.Jobs {
-		job := &hw.Spec.Jobs[i]
-		task := map[string]any{
-			"name": job.Name,
-		}
-
-		dependencies := sortedKeys(jobDeps[job.Name])
-		if len(dependencies) > 0 {
-			task["dependencies"] = dependencies
-		}
-
-		inputArgs, err := processJobInputs(job, jobTypes, jobsByName)
+	for i := range jobs {
+		job := &jobs[i]
+		task, templateDef, err := compileJobTask(job, sortedKeys(jobDeps[job.Name]), slurmJobNeeds[job.Name], jobTypes, jobsByName, usedTemplates)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-
-		taskArgs := map[string]any{}
-
-		switch job.Type {
-		case hybridwfv1alpha1.HybridWorkflowJobTypeK8s:
-			if job.JobSpec == nil {
-				return nil, fmt.Errorf("k8s job %q requires jobSpec", job.Name)
-			}
-
-			templateName := job.Template
-			if templateName == "" {
-				templateName = fmt.Sprintf("%s-template", job.Name)
-			}
-			if _, exists := usedTemplates[templateName]; exists {
-				return nil, fmt.Errorf("duplicate template name: %s", templateName)
-			}
-			usedTemplates[templateName] = struct{}{}
-			task["template"] = templateName
-
-			templateDef, err := buildK8sTemplate(templateName, job)
-			if err != nil {
-				return nil, err
-			}
-			additionalTemplates = append(additionalTemplates, templateDef)
-
-		case hybridwfv1alpha1.HybridWorkflowJobTypeSlurm:
-			if job.Command == "" {
-				return nil, fmt.Errorf("slurm job %q requires command", job.Name)
-			}
-
-			params := []any{
-				map[string]any{
-					"name":  "command",
-					"value": job.Command,
-				},
-			}
-			for _, output := range job.Outputs {
-				value, err := decodeJSON(output.Value)
-				if err != nil {
-					return nil, fmt.Errorf("decode output %q for job %q: %w", output.Name, job.Name, err)
-				}
-				params = append(params, map[string]any{
-					"name":  output.Name,
-					"value": value,
-				})
-			}
-			if slurmJobNeeds[job.Name] && !hasOutput(job.Outputs, "fetchData") {
-				params = append(params, map[string]any{
-					"name":  "fetchData",
-					"value": "true",
-				})
-			}
-			taskArgs["parameters"] = params
-			task["templateRef"] = map[string]any{
-				"name":         "slurm-template",
-				"template":     "slurm-submit-job",
-				"clusterScope": true,
-			}
-
-		default:
-			return nil, fmt.Errorf("unsupported job type: %s", job.Type)
-		}
-
-		taskArgs = mergeArguments(taskArgs, inputArgs)
-		if len(taskArgs) > 0 {
-			task["arguments"] = taskArgs
-		}
-
 		dagTasks = append(dagTasks, task)
+		if templateDef != nil {
+			additionalTemplates = append(additionalTemplates, templateDef)
+		}
 	}
 
+	return dagTasks, additionalTemplates, nil
+}
+
+func compileJobTask(
+	job *hybridwfv1alpha1.HybridWorkflowJob,
+	dependencies []string,
+	slurmNeedsFetch bool,
+	jobTypes map[string]hybridwfv1alpha1.HybridWorkflowJobType,
+	jobsByName map[string]*hybridwfv1alpha1.HybridWorkflowJob,
+	usedTemplates map[string]struct{},
+) (map[string]any, map[string]any, error) {
+	task := map[string]any{
+		"name": job.Name,
+	}
+	if len(dependencies) > 0 {
+		task["dependencies"] = dependencies
+	}
+
+	inputArgs, err := processJobInputs(job, jobTypes, jobsByName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	taskArgs := map[string]any{}
+	var templateDef map[string]any
+
+	switch job.Type {
+	case hybridwfv1alpha1.HybridWorkflowJobTypeK8s:
+		templateDef, err = configureK8sTask(job, task, usedTemplates)
+		if err != nil {
+			return nil, nil, err
+		}
+	case hybridwfv1alpha1.HybridWorkflowJobTypeSlurm:
+		if err := configureSlurmTask(job, task, taskArgs, slurmNeedsFetch); err != nil {
+			return nil, nil, err
+		}
+	default:
+		return nil, nil, fmt.Errorf("unsupported job type: %s", job.Type)
+	}
+
+	taskArgs = mergeArguments(taskArgs, inputArgs)
+	if len(taskArgs) > 0 {
+		task["arguments"] = taskArgs
+	}
+
+	return task, templateDef, nil
+}
+
+func configureK8sTask(
+	job *hybridwfv1alpha1.HybridWorkflowJob,
+	task map[string]any,
+	usedTemplates map[string]struct{},
+) (map[string]any, error) {
+	if job.JobSpec == nil {
+		return nil, fmt.Errorf("k8s job %q requires jobSpec", job.Name)
+	}
+
+	templateName := job.Template
+	if templateName == "" {
+		templateName = fmt.Sprintf("%s-template", job.Name)
+	}
+	if _, exists := usedTemplates[templateName]; exists {
+		return nil, fmt.Errorf("duplicate template name: %s", templateName)
+	}
+	usedTemplates[templateName] = struct{}{}
+	task["template"] = templateName
+
+	templateDef, err := buildK8sTemplate(templateName, job)
+	if err != nil {
+		return nil, err
+	}
+
+	return templateDef, nil
+}
+
+func configureSlurmTask(
+	job *hybridwfv1alpha1.HybridWorkflowJob,
+	task map[string]any,
+	taskArgs map[string]any,
+	slurmNeedsFetch bool,
+) error {
+	if job.Command == "" {
+		return fmt.Errorf("slurm job %q requires command", job.Name)
+	}
+
+	params := []any{
+		map[string]any{
+			"name":  "command",
+			"value": job.Command,
+		},
+	}
+	for _, output := range job.Outputs {
+		value, err := decodeJSON(output.Value)
+		if err != nil {
+			return fmt.Errorf("decode output %q for job %q: %w", output.Name, job.Name, err)
+		}
+		params = append(params, map[string]any{
+			"name":  output.Name,
+			"value": value,
+		})
+	}
+	if slurmNeedsFetch && !hasOutput(job.Outputs, "fetchData") {
+		params = append(params, map[string]any{
+			"name":  "fetchData",
+			"value": "true",
+		})
+	}
+	taskArgs["parameters"] = params
+	task["templateRef"] = map[string]any{
+		"name":         "slurm-template",
+		"template":     "slurm-submit-job",
+		"clusterScope": true,
+	}
+
+	return nil
+}
+
+func populateWorkflowTemplates(workflow map[string]any, dagTasks []any, additionalTemplates []any) {
 	spec := workflow["spec"].(map[string]any)
 	templates := spec["templates"].([]any)
 	rootTemplate := templates[0].(map[string]any)
 	rootTemplate["dag"].(map[string]any)["tasks"] = dagTasks
 	spec["templates"] = append(templates, additionalTemplates...)
-
-	if err := applySlurmCleanup(workflow, hw.Spec.Jobs); err != nil {
-		return nil, err
-	}
-
-	raw, err := json.Marshal(workflow)
-	if err != nil {
-		return nil, fmt.Errorf("marshal compiled workflow: %w", err)
-	}
-
-	var compiled wfv1.Workflow
-	if err := json.Unmarshal(raw, &compiled); err != nil {
-		return nil, fmt.Errorf("unmarshal compiled workflow: %w", err)
-	}
-
-	return &compiled, nil
 }
 
 func buildK8sTemplate(templateName string, job *hybridwfv1alpha1.HybridWorkflowJob) (map[string]any, error) {

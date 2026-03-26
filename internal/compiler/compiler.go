@@ -3,6 +3,7 @@ package compiler
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -320,9 +321,7 @@ func buildK8sTemplate(templateName string, job *hybridwfv1alpha1.HybridWorkflowJ
 		jobSpec["container"] = containerSpec
 	}
 
-	for key, value := range jobSpec {
-		template[key] = value
-	}
+	maps.Copy(template, jobSpec)
 
 	return template, nil
 }

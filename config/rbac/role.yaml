@@ -1,11 +1,40 @@
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
-    app.kubernetes.io/name: hybrid-workflows-operator
-    app.kubernetes.io/managed-by: kustomize
   name: manager-role
 rules:
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - argoproj.io
+  resources:
+  - workflows
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hybridwf.io
+  resources:
+  - hybridworkflows
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - hybridwf.io
+  resources:
+  - hybridworkflows/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - hybridwf.io
+  resources:
+  - hybridworkflows/status
+  verbs:
+  - get
+  - patch
+  - update

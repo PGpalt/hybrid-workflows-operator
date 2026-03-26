@@ -1,0 +1,46 @@
+apiVersion: hybridwf.io/v1alpha1
+kind: HybridWorkflow
+metadata:
+  name: e2e-sample
+spec:
+  jobs:
+  - name: prepare
+    type: k8s
+    inputs:
+    - name: message
+      value: hello from e2e
+    jobSpec:
+      inputs:
+        parameters:
+        - name: message
+      outputs:
+        artifacts:
+        - name: workspace
+          path: /tmp/workspace
+      container:
+        image: busybox
+        command: ["sh", "-c"]
+        args: ["mkdir -p /tmp/workspace && printf '%s' '{{inputs.parameters.message}}' >/tmp/workspace/message.txt"]
+  - name: train
+    type: slurm
+    command: sbatch train.slurm
+    inputs:
+    - from: prepare.workspace
+    outputs:
+    - name: outputFileName
+      value: mnist.log
+  - name: report
+    type: k8s
+    inputs:
+    - name: logs
+      from: train
+      type: artifact
+    jobSpec:
+      inputs:
+        artifacts:
+        - name: logs
+          path: /tmp/logs
+      container:
+        image: alpine
+        command: ["sh", "-c"]
+        args: ["ls -la /tmp/logs"]

@@ -1,0 +1,112 @@
+name: Release Operator
+
+on:
+  push:
+    branches:
+    - main
+    tags:
+    - v*
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ghcr.io
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Compute image metadata
+      id: vars
+      shell: bash
+      run: |
+        echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        echo "sha_tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+        if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+          echo "primary_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+        else
+          echo "primary_tag=main" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Generate Docker tags
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ steps.vars.outputs.image }}
+        tags: |
+          type=raw,value=${{ steps.vars.outputs.primary_tag }}
+          type=raw,value=${{ steps.vars.outputs.sha_tag }}
+
+    - name: Build and push controller image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Generate installer manifest
+      run: make build-installer IMG=${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.primary_tag }}
+
+    - name: Upload installer artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: hybrid-workflows-operator-install
+        path: dist/install.yaml
+
+    - name: Publish GitHub release assets
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: dist/install.yaml
+
+    - name: Promote image in GitOps repo
+      if: github.ref == 'refs/heads/main'
+      env:
+        GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
+      shell: bash
+      run: |
+        if [[ -z "${GITOPS_REPO_TOKEN}" ]]; then
+          echo "GITOPS_REPO_TOKEN is not configured; skipping GitOps promotion."
+          exit 0
+        fi
+
+        git clone "https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/PGpalt/hybrid-workflows-gitops.git" /tmp/hybrid-workflows-gitops
+        cd /tmp/hybrid-workflows-gitops
+
+        image_file="apps/hybrid-workflows-operator/overlays/dev/image-patch.yaml"
+        image_ref="${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha_tag }}"
+        sed -i "s#^\([[:space:]]*image:[[:space:]]*\).*#\1${image_ref}#" "${image_file}"
+
+        if git diff --quiet -- "${image_file}"; then
+          echo "GitOps repo already points at ${image_ref}; nothing to do."
+          exit 0
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add "${image_file}"
+        git commit -m "chore(operator): promote hybrid-workflows-operator to ${{
+          steps.vars.outputs.sha_tag }}"
+        git push origin HEAD:main

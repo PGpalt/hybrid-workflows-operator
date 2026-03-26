@@ -52,6 +52,16 @@ var _ = Describe("Manager", Ordered, func() {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
 
+		By("installing the minimal Argo Workflow CRD required for reconciliation")
+		cmd = exec.Command("kubectl", "apply", "-f", e2eAssetPath("argo-workflows-crd.yaml"))
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to install the Argo Workflow CRD")
+
+		By("waiting for the Argo Workflow CRD to become established")
+		cmd = exec.Command("kubectl", "wait", "--for=condition=Established", "crd/workflows.argoproj.io", "--timeout=2m")
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed waiting for the Argo Workflow CRD")
+
 		By("deploying the controller-manager")
 		cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", managerImage))
 		_, err = utils.Run(cmd)
@@ -71,6 +81,10 @@ var _ = Describe("Manager", Ordered, func() {
 
 		By("uninstalling CRDs")
 		cmd = exec.Command("make", "uninstall")
+		_, _ = utils.Run(cmd)
+
+		By("removing the Argo Workflow CRD used by the e2e suite")
+		cmd = exec.Command("kubectl", "delete", "-f", e2eAssetPath("argo-workflows-crd.yaml"))
 		_, _ = utils.Run(cmd)
 
 		By("removing manager namespace")
@@ -252,6 +266,66 @@ var _ = Describe("Manager", Ordered, func() {
 			Eventually(verifyMetricsAvailable, 2*time.Minute).Should(Succeed())
 		})
 
+		It("should reconcile a HybridWorkflow into a child Workflow and reflect child status", func() {
+			sampleManifest := e2eAssetPath("hybridworkflow-sample.yaml")
+
+			DeferCleanup(func() {
+				cmd := exec.Command("kubectl", "delete", "-n", namespace, "-f", sampleManifest, "--ignore-not-found")
+				_, _ = utils.Run(cmd)
+
+				cmd = exec.Command("kubectl", "delete", "workflow", "e2e-sample-workflow", "-n", namespace, "--ignore-not-found")
+				_, _ = utils.Run(cmd)
+			})
+
+			By("applying a HybridWorkflow sample")
+			cmd := exec.Command("kubectl", "apply", "-n", namespace, "-f", sampleManifest)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to apply HybridWorkflow sample")
+
+			By("verifying the controller created a child Workflow with the expected owner reference")
+			verifyChildWorkflowCreated := func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "workflow", "e2e-sample-workflow", "-n", namespace, "-o", "jsonpath={.metadata.ownerReferences[0].kind}:{.metadata.ownerReferences[0].name}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("HybridWorkflow:e2e-sample"))
+			}
+			Eventually(verifyChildWorkflowCreated).Should(Succeed())
+
+			By("verifying the rendered Workflow contains the expected slurm templateRef")
+			verifyRenderedWorkflow := func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "workflow", "e2e-sample-workflow", "-n", namespace, "-o", "yaml")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(ContainSubstring("name: slurm-template"))
+				g.Expect(output).To(ContainSubstring("clusterScope: true"))
+				g.Expect(output).To(ContainSubstring("hybridwf.io/name: e2e-sample"))
+			}
+			Eventually(verifyRenderedWorkflow).Should(Succeed())
+
+			By("verifying the HybridWorkflow status points at the rendered Workflow")
+			verifyHybridWorkflowStatus := func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "hybridworkflow", "e2e-sample", "-n", namespace, "-o", "jsonpath={.status.renderedWorkflowName}:{.status.phase}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("e2e-sample-workflow:Submitted"))
+			}
+			Eventually(verifyHybridWorkflowStatus).Should(Succeed())
+
+			By("patching the child Workflow status to Running")
+			cmd = exec.Command("kubectl", "patch", "workflow", "e2e-sample-workflow", "-n", namespace, "--subresource=status", "--type=merge", "-p", `{"status":{"phase":"Running"}}`)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to patch child Workflow status")
+
+			By("verifying the HybridWorkflow status follows the child Workflow phase")
+			verifyHybridWorkflowRunning := func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "hybridworkflow", "e2e-sample", "-n", namespace, "-o", "jsonpath={.status.phase}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("Running"))
+			}
+			Eventually(verifyHybridWorkflowRunning).Should(Succeed())
+		})
+
 		// +kubebuilder:scaffold:e2e-webhooks-checks
 
 		// TODO: Customize the e2e test suite with scenarios specific to your project.
@@ -320,4 +394,12 @@ type tokenRequest struct {
 	Status struct {
 		Token string `json:"token"`
 	} `json:"status"`
+}
+
+func e2eAssetPath(name string) string {
+	dir, err := utils.GetProjectDir()
+	if err != nil {
+		panic(err)
+	}
+	return filepath.Join(dir, "test", "e2e", name)
 }

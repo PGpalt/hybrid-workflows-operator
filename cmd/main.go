@@ -20,6 +20,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	hybridwfv1alpha1 "github.com/PGpalt/hybrid-workflows-operator/api/v1alpha1"
+	"github.com/PGpalt/hybrid-workflows-operator/internal/controller"
+	argoworkflowv1alpha1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -32,6 +34,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(hybridwfv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(argoworkflowv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -158,6 +161,14 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error(err, "Failed to start manager")
+		os.Exit(1)
+	}
+
+	if err = (&controller.HybridWorkflowReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "HybridWorkflow")
 		os.Exit(1)
 	}
 

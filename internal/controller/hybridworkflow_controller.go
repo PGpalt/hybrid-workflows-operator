@@ -44,6 +44,7 @@ func (r *HybridWorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.setReadyCondition(&hybridWorkflow, metav1.ConditionFalse, "CompileFailed", err.Error())
 		hybridWorkflow.Status.ObservedGeneration = hybridWorkflow.Generation
 		hybridWorkflow.Status.Phase = hybridwfv1alpha1.HybridWorkflowPhaseError
+		r.syncTerminalConditions(&hybridWorkflow, hybridwfv1alpha1.HybridWorkflowPhaseError, "CompileFailed", err.Error())
 		if statusErr := r.patchStatus(ctx, &hybridWorkflow, originalStatus); statusErr != nil {
 			return ctrl.Result{}, fmt.Errorf("compile error %v; status patch error: %w", err, statusErr)
 		}
@@ -70,6 +71,7 @@ func (r *HybridWorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.setReadyCondition(&hybridWorkflow, metav1.ConditionFalse, "WorkflowSyncFailed", err.Error())
 		hybridWorkflow.Status.ObservedGeneration = hybridWorkflow.Generation
 		hybridWorkflow.Status.Phase = hybridwfv1alpha1.HybridWorkflowPhaseError
+		r.syncTerminalConditions(&hybridWorkflow, hybridwfv1alpha1.HybridWorkflowPhaseError, "WorkflowSyncFailed", err.Error())
 		if statusErr := r.patchStatus(ctx, &hybridWorkflow, originalStatus); statusErr != nil {
 			return ctrl.Result{}, fmt.Errorf("workflow sync error %v; status patch error: %w", err, statusErr)
 		}
@@ -79,6 +81,7 @@ func (r *HybridWorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	hybridWorkflow.Status.ObservedGeneration = hybridWorkflow.Generation
 	hybridWorkflow.Status.RenderedWorkflowName = workflow.Name
 	hybridWorkflow.Status.Phase = mapWorkflowPhase(workflow.Status.Phase)
+	r.syncTerminalConditions(&hybridWorkflow, hybridWorkflow.Status.Phase, "WorkflowPhaseUpdated", fmt.Sprintf("workflow %s phase is %s", workflow.Name, hybridWorkflow.Status.Phase))
 	r.setReadyCondition(&hybridWorkflow, metav1.ConditionTrue, "Reconciled", fmt.Sprintf("workflow %s reconciled", workflow.Name))
 
 	if err := r.patchStatus(ctx, &hybridWorkflow, originalStatus); err != nil {
@@ -112,9 +115,18 @@ func (r *HybridWorkflowReconciler) setReadyCondition(
 	status metav1.ConditionStatus,
 	reason, message string,
 ) {
+	r.setCondition(hwf, "Ready", status, reason, message)
+}
+
+func (r *HybridWorkflowReconciler) setCondition(
+	hwf *hybridwfv1alpha1.HybridWorkflow,
+	conditionType string,
+	status metav1.ConditionStatus,
+	reason, message string,
+) {
 	now := metav1.Now()
 	for i := range hwf.Status.Conditions {
-		if hwf.Status.Conditions[i].Type != "Ready" {
+		if hwf.Status.Conditions[i].Type != conditionType {
 			continue
 		}
 		if hwf.Status.Conditions[i].Status != status ||
@@ -130,13 +142,31 @@ func (r *HybridWorkflowReconciler) setReadyCondition(
 	}
 
 	hwf.Status.Conditions = append(hwf.Status.Conditions, hybridwfv1alpha1.HybridWorkflowCondition{
-		Type:               "Ready",
+		Type:               conditionType,
 		Status:             status,
 		Reason:             reason,
 		Message:            message,
 		ObservedGeneration: hwf.Generation,
 		LastTransitionTime: now,
 	})
+}
+
+func (r *HybridWorkflowReconciler) syncTerminalConditions(
+	hwf *hybridwfv1alpha1.HybridWorkflow,
+	phase hybridwfv1alpha1.HybridWorkflowPhase,
+	reason, message string,
+) {
+	switch phase {
+	case hybridwfv1alpha1.HybridWorkflowPhaseSucceeded:
+		r.setCondition(hwf, "Succeeded", metav1.ConditionTrue, reason, message)
+		r.setCondition(hwf, "Failed", metav1.ConditionFalse, "NotFailed", "workflow has not failed")
+	case hybridwfv1alpha1.HybridWorkflowPhaseFailed, hybridwfv1alpha1.HybridWorkflowPhaseError:
+		r.setCondition(hwf, "Succeeded", metav1.ConditionFalse, "NotSucceeded", "workflow has not succeeded")
+		r.setCondition(hwf, "Failed", metav1.ConditionTrue, reason, message)
+	default:
+		r.setCondition(hwf, "Succeeded", metav1.ConditionFalse, "NotSucceeded", "workflow has not succeeded")
+		r.setCondition(hwf, "Failed", metav1.ConditionFalse, "NotFailed", "workflow has not failed")
+	}
 }
 
 func childWorkflowName(hwf *hybridwfv1alpha1.HybridWorkflow) string {

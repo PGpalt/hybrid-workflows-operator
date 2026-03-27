@@ -66,7 +66,7 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
 KIND_CLUSTER ?= hybrid-workflows-operator-test-e2e
-KIND_NODE_IMAGE ?= ghcr.io/PGpalt/kindest-node:v1.35.0@sha256:b7f5e1f621afb1156eb0f27f26c804e5265c07d8e9c55516d25d66400043629b
+KIND_NODE_IMAGE ?= ghcr.io/pgpalt/kindest-node:v1.35.0@sha256:b7f5e1f621afb1156eb0f27f26c804e5265c07d8e9c55516d25d66400043629b
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist

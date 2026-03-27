@@ -10,6 +10,8 @@ jobs:
   test-e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
+    env:
+      KIND_NODE_IMAGE: ghcr.io/PGpalt/kindest-node:v1.35.0@sha256:b7f5e1f621afb1156eb0f27f26c804e5265c07d8e9c55516d25d66400043629b
     steps:
       - name: Clone the code
         uses: actions/checkout@v5

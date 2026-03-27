@@ -4,74 +4,133 @@ metadata:
   labels:
     app.kubernetes.io/name: hybrid-workflows-operator
     app.kubernetes.io/managed-by: kustomize
-  name: genomic-qc-alignment
+  name: variations
   namespace: argo
-spec:
+spec:  
   jobs:
-  - name: fastp-trimming
-    type: k8s
-    jobSpec:
-      container:
-        image: quay.io/biocontainers/fastp:0.23.1--h79da9fb_0
-        command: ["sh", "-c"]
-        args:
-        - |
-          mkdir -p /out && \
-          fastp \
-            -i /data/sample_R1.fastq.gz \
-            -I /data/sample_R2.fastq.gz \
-            -o /out/sample_R1.trimmed.fastq.gz \
-            -O /out/sample_R2.trimmed.fastq.gz \
-            -h /out/trim_report.html
+    - name: gen-epochs
+      type: k8s
+      jobSpec:
+        script:
+          image: python:alpine3.6
+          command:
+            - python
+          source: |
+            import random
+            print(60000//random.randint(40000, 40000))
+
+    - name: generate
+      type: k8s
+      jobSpec:
+        container:
+          image: busybox
+          command: [sh, -c]
+          args: ["echo hello world | tee /tmp/file.txt"]
+        outputs:
+          parameters:
+            - name: output-param-1
+              valueFrom:
+                path: /tmp/file.txt
+          artifacts:
+            - name: file
+              path: /tmp/file.txt
+              s3:
+                key: Mnist-Dataset/data/my-dir/my-file
+              archive:
+                none: { }  
+
+    - name: generate2
+      type: k8s
+      jobSpec:
+        container:
+          image: busybox
+          command: [sh, -c]
+          args: ["echo hello world 2 | tee /tmp/file2.txt"]
+        outputs:
+          artifacts:
+            - name: file2
+              path: /tmp/file2.txt
+              s3:
+                key: Mnist-Dataset/data/my-dir/my-file2
+              archive:
+                none: { }                
+
+    - name: print-message-from-slurm-output
+      type: k8s
+      jobSpec:
+        inputs:
+          artifacts:
+          # unpack the message input artifact
+          # and put it at /tmp/message
+          - name: message
+            path: /tmp/message
+        container:
+          image: alpine:latest
+          command: [sh, -c]
+          args: ["cat /tmp/message/mnist.log"] 
       inputs:
-        artifacts:
-        - name: inputArtifact
-          path: /data
-          s3:
-            key: GenomicData
-          archive:
-            none: {}
+        - name: message
+          from: model-training
+          type: artifact      
+
+    - name: print-slurm-message-from-slurm-output
+      type: slurm
+      command: "cat mnist.log"
+      inputs:
+        - from: model-training
+
+    - name: print-message-from-file
+      type: k8s
+      jobSpec:
+        inputs:
+          artifacts:
+          - name: message
+            path: /tmp/message
+        container:
+          image: alpine:latest
+          command: [sh, -c]
+          args: ["cat /tmp/message"] 
+      inputs:
+        - name: message
+          from: generate.file   
+          type: artifact          
+
+    - name: print-message-from-input
+      type: k8s
+      jobSpec:
+        inputs:
+          parameters:
+            - name: template-param-1
+        script:
+          image: alpine
+          command: [/bin/sh]
+          source: |
+              echo "{{inputs.parameters.template-param-1}}"
+      inputs:
+        - name: template-param-1
+          from: generate.output-param-1
+          type: parameter
+
+    - name: model-training
+      type: slurm
+      command: "export LR=0.017 && export epochs={{tasks.gen-epochs.outputs.result}} && sbatch katib-train-local.slurm"
+      inputs:
+        - s3key: Mnist-Dataset
+          path: /tmp/mnist-job/
+        - from: gen-epochs
       outputs:
-        artifacts:
-        - name: outputArtifact
-          path: /out
-          s3:
-            key: GenomicDataAris
-          archive:
-            none: {}
-  - name: ARIS-Input-Stage
-    type: slurm
-    command: ls
-    inputs:
-    - s3key: GenomicDataAris
-    - from: fastp-trimming
-  - name: Alignment1
-    type: slurm
-    command: export DATAPATH='E-Coli' && sbatch QC-Alignment-local.slurm
-    inputs:
-    - from: ARIS-Input-Stage
-    outputs:
-    - name: fetchData
-      value: "true"
-    - name: outputFileName
-      value: E-Coli/alignment_summary.txt
-  - name: Alignment2
-    type: slurm
-    command: export DATAPATH='Salmonella-Enterica' && sbatch QC-Alignment-local.slurm
-    inputs:
-    - from: ARIS-Input-Stage
-    outputs:
-    - name: fetchData
-      value: "true"
-    - name: outputFileName
-      value: Salmonella-Enterica/alignment_summary.txt
-  - name: Alignment3
-    type: slurm
-    command: export DATAPATH='Shigella' && sbatch QC-Alignment-local.slurm
-    inputs:
-    - from: ARIS-Input-Stage
-    outputs:
-    - name: fetchData
-      value: "true"
-    - name: outputFileName
-      value: Shigella/alignment_summary.txt
+        - name: outputFileName
+          value: mnist.log
+
+    - name: model-training2
+      type: slurm
+      command: "export LR=0.017 && cat data/my-dir/my-file2 && cat data/my-dir/my-file && export epochs={{tasks.gen-epochs.outputs.result}} && echo $epochs && cat /tmp/mnist-job/mnist.log && sbatch katib-train-local.slurm"
+      inputs:
+        - s3key: Mnist-Dataset
+        - from: gen-epochs
+        - from: generate
+        - from: generate2
+        - from: model-training
+      outputs:
+        - name: outputFileName
+          value: mnist.log

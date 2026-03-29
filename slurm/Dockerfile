@@ -112,15 +112,13 @@ RUN mkdir -p /etc/slurm /var/log/slurm /var/spool/slurmctld /var/spool/slurmd &&
 COPY slurm.conf /etc/slurm/slurm.conf
 RUN chown slurm:slurm /etc/slurm/slurm.conf && chmod 0644 /etc/slurm/slurm.conf
 
-# 11) OpenSSH server (keep 22 inside; map host 2220 → 22 at runtime)
+# 11) OpenSSH server (keep 22 inside; map host 2220 -> 22 at runtime)
 RUN ssh-keygen -A \
  && sed -ri 's/^#?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config \
  && sed -ri 's/^#?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
- && echo 'root:root' | chpasswd
-
-# Supervisord program so sshd runs alongside Slurm daemons
-RUN mkdir -p /etc/supervisord.d && \
-    printf '[program:sshd]\ncommand=/usr/sbin/sshd -D\nautostart=true\nautorestart=true\npriority=5\n' > /etc/supervisord.d/sshd.ini
+ && echo 'root:root' | chpasswd \
+ && mkdir -p /var/run/sshd \
+ && printf '\n[program:sshd]\ncommand=/usr/sbin/sshd -D\nautostart=true\nautorestart=true\nexitcodes=0,1,2\nstdout_logfile=/var/log/supervisor/sshd.log\nstdout_logfile_maxbytes=1MB\nstdout_logfile_backups=5\nstderr_logfile=/var/log/supervisor/sshd.log\nstderr_logfile_maxbytes=1MB\nstderr_logfile_backups=5\npriority=5\n' >> /etc/supervisord.conf
 
 # Convenience PATH
 ENV PATH=/opt/bowtie2-2.2.6:/opt/samtools-1.9/bin:$PATH

@@ -146,8 +146,9 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
 	mkdir -p dist
 	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	cd slurm-agent && "$(KUSTOMIZE)" edit set image hybrid-workflows-ssh-client=${SSH_CLIENT_IMG}
-	{ "$(KUSTOMIZE)" build config/default; echo "---"; "$(KUSTOMIZE)" build slurm-agent; } > dist/install.yaml
+	"$(KUSTOMIZE)" build config/default > dist/install.yaml
+	echo "---" >> dist/install.yaml
+	"$(KUSTOMIZE)" build slurm-agent | sed 's#image: hybrid-workflows-ssh-client:latest#image: ${SSH_CLIENT_IMG}#' >> dist/install.yaml
 
 ##@ Deployment
 

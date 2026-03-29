@@ -3,8 +3,3 @@ kind: Kustomization
 
 resources:
 - slurm-job-workflow-template.yaml
-
-images:
-- name: hybrid-workflows-ssh-client
-  newName: ghcr.io/pgpalt/hybrid-workflows-ssh-client
-  newTag: main

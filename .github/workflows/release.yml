@@ -6,8 +6,20 @@ on:
     - main
     tags:
     - v*
-    paths-ignore:
-    - '**/*.md'
+    paths:
+    - '.github/workflows/**'
+    - 'api/**'
+    - 'cmd/**'
+    - 'config/**'
+    - 'internal/**'
+    - 'slurm-agent/**'
+    - 'test/**'
+    - '.custom-gcl.yml'
+    - '.dockerignore'
+    - 'Dockerfile'
+    - 'Makefile'
+    - 'go.mod'
+    - 'go.sum'
   workflow_dispatch:
 
 permissions:
@@ -33,6 +45,7 @@ jobs:
       shell: bash
       run: |
         echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        echo "ssh_image=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/hybrid-workflows-ssh-client" >> "$GITHUB_OUTPUT"
         echo "sha_tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
         if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
           echo "primary_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
@@ -68,8 +81,18 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
 
+    - name: Build and push SSH client image
+      uses: docker/build-push-action@v6
+      with:
+        context: ./slurm-agent
+        file: ./slurm-agent/Dockerfile.ssh-client
+        push: true
+        tags: |
+          ${{ steps.vars.outputs.ssh_image }}:${{ steps.vars.outputs.primary_tag }}
+          ${{ steps.vars.outputs.ssh_image }}:${{ steps.vars.outputs.sha_tag }}
+
     - name: Generate installer manifest
-      run: make build-installer IMG=${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.primary_tag }}
+      run: make build-installer IMG=${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha_tag }} SSH_CLIENT_IMG=${{ steps.vars.outputs.ssh_image }}:${{ steps.vars.outputs.sha_tag }}
 
     - name: Upload installer artifact
       uses: actions/upload-artifact@v6

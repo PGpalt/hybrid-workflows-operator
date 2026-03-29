@@ -4,11 +4,35 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**/*.md'
+    paths:
+      - '.github/workflows/**'
+      - 'api/**'
+      - 'cmd/**'
+      - 'config/**'
+      - 'internal/**'
+      - 'slurm-agent/**'
+      - 'test/**'
+      - '.custom-gcl.yml'
+      - '.dockerignore'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
   pull_request:
-    paths-ignore:
-      - '**/*.md'
+    paths:
+      - '.github/workflows/**'
+      - 'api/**'
+      - 'cmd/**'
+      - 'config/**'
+      - 'internal/**'
+      - 'slurm-agent/**'
+      - 'test/**'
+      - '.custom-gcl.yml'
+      - '.dockerignore'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
 
 jobs:
   lint:

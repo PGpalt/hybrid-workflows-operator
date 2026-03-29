@@ -4,7 +4,7 @@ metadata:
   labels:
     app.kubernetes.io/name: hybrid-workflows-operator
     app.kubernetes.io/managed-by: kustomize
-  name: genomic-qc-alignment
+  name: custom-scheduler-example
   namespace: argo
 spec:
   jobs:

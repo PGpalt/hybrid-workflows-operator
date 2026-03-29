@@ -2,14 +2,49 @@ package compiler
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
 
 	hybridwfv1alpha1 "github.com/PGpalt/hybrid-workflows-operator/api/v1alpha1"
 )
+
+func TestCompileShippedHybridWorkflowSamples(t *testing.T) {
+	t.Parallel()
+
+	sampleFiles := []string{
+		"hybridwf_v1alpha1_hybridworkflow.yaml",
+		"hybridwf-genomic-qc-alignment.yaml",
+		"hybridwf-intermediate-step-clean-up.yaml",
+		"hybridwf-custom-scheduler-example.yaml",
+	}
+
+	for _, sampleFile := range sampleFiles {
+		t.Run(sampleFile, func(t *testing.T) {
+			t.Parallel()
+
+			samplePath := filepath.Join("..", "..", "config", "samples", sampleFile)
+			data, err := os.ReadFile(samplePath)
+			if err != nil {
+				t.Fatalf("read sample %s: %v", sampleFile, err)
+			}
+
+			var hw hybridwfv1alpha1.HybridWorkflow
+			if err := yaml.Unmarshal(data, &hw); err != nil {
+				t.Fatalf("unmarshal sample %s: %v", sampleFile, err)
+			}
+
+			if _, err := Compile(&hw); err != nil {
+				t.Fatalf("compile sample %s: %v", sampleFile, err)
+			}
+		})
+	}
+}
 
 func TestCompileBuildsWorkflowFromMixedJobs(t *testing.T) {
 	hw := &hybridwfv1alpha1.HybridWorkflow{

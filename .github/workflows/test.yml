@@ -4,11 +4,35 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**/*.md'
+    paths:
+      - '.github/workflows/**'
+      - 'api/**'
+      - 'cmd/**'
+      - 'config/**'
+      - 'internal/**'
+      - 'slurm-agent/**'
+      - 'test/**'
+      - '.custom-gcl.yml'
+      - '.dockerignore'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
   pull_request:
-    paths-ignore:
-      - '**/*.md'
+    paths:
+      - '.github/workflows/**'
+      - 'api/**'
+      - 'cmd/**'
+      - 'config/**'
+      - 'internal/**'
+      - 'slurm-agent/**'
+      - 'test/**'
+      - '.custom-gcl.yml'
+      - '.dockerignore'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
 
 jobs:
   test:
@@ -27,3 +51,15 @@ jobs:
         run: |
           go mod tidy
           make test
+
+      - name: Build SSH client image
+        run: docker build -f slurm-agent/Dockerfile.ssh-client -t example.com/hybrid-workflows-ssh-client:test slurm-agent
+
+      - name: Build installer bundle
+        run: make build-installer IMG=example.com/hybrid-workflows-operator:test SSH_CLIENT_IMG=example.com/hybrid-workflows-ssh-client:test
+
+      - name: Validate bundled slurm template
+        run: |
+          grep -q '^kind: ClusterWorkflowTemplate$' dist/install.yaml
+          grep -q '^  name: slurm-template$' dist/install.yaml
+          grep -q 'example.com/hybrid-workflows-ssh-client:test' dist/install.yaml

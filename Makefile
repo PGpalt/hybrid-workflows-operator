@@ -1,5 +1,6 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+SSH_CLIENT_IMG ?= ghcr.io/pgpalt/hybrid-workflows-ssh-client:main
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -145,7 +146,8 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
 	mkdir -p dist
 	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default > dist/install.yaml
+	cd slurm-agent && "$(KUSTOMIZE)" edit set image hybrid-workflows-ssh-client=${SSH_CLIENT_IMG}
+	{ "$(KUSTOMIZE)" build config/default; echo "---"; "$(KUSTOMIZE)" build slurm-agent; } > dist/install.yaml
 
 ##@ Deployment
 

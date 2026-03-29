@@ -1,0 +1,106 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: slurm-template
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  entrypoint: slurm-submit-job
+  templates:
+    - name: slurm-submit-job
+      inputs:
+        parameters:
+          - name: command
+          - name: s3artifact
+            default: "NotSet"
+          - name: slurmInput
+            default: "false"
+          - name: fetchData
+            default: "false"
+          - name: cleanData
+            default: "false"
+          - name: cleanDataPath
+            default: "NotSet"
+          - name: inputFilePath
+            default: "NotSet"
+          - name: outputFileName
+            default: "NotSet"
+          - name: outputFilePath
+            default: "slurm-out"
+        artifacts:
+          - name: input-artifact
+            path: /tmp/
+            optional: true
+            s3:
+              key: "{{inputs.parameters.s3artifact}}"
+      outputs:
+        artifacts:
+          - name: output-artifact
+            path: "{{inputs.parameters.outputFilePath}}/"
+            optional: true
+            s3:
+              key: "{{workflow.uid}}/{{pod.name}}"
+            archive:
+              none: {}
+      volumes:
+        - name: ssh-keys
+          secret:
+            secretName: slurm-ssh-key
+            defaultMode: 0600
+            items:
+              - key: ssh-privatekey
+                path: id_rsa
+      container:
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: SSH_HOST
+            valueFrom:
+              secretKeyRef:
+                name: ssh-connect-info
+                key: sshHost
+          - name: SSH_USER
+            valueFrom:
+              secretKeyRef:
+                name: ssh-connect-info
+                key: sshUser
+          - name: SSH_PORT
+            valueFrom:
+              secretKeyRef:
+                name: ssh-connect-info
+                key: sshPort
+                optional: true  
+          - name: COMMAND
+            value: "{{inputs.parameters.command}}"
+          - name: TRANSFER_DATA
+            value: "{{inputs.parameters.s3artifact}}"
+          - name: OUTPUT_FILE_NAME
+            value: "{{inputs.parameters.outputFileName}}"
+          - name: OUTPUT_FILE_PATH
+            value: "{{inputs.parameters.outputFilePath}}"
+          - name: INPUT_FILE_PATH
+            value: "{{inputs.parameters.inputFilePath}}"
+          - name: SLURM_INPUT
+            value: "{{inputs.parameters.slurmInput}}"
+          - name: FETCH_DATA
+            value: "{{inputs.parameters.fetchData}}"
+          - name: CLEAN_DATA
+            value: "{{inputs.parameters.cleanData}}"
+          - name: CLEAN_DATA_PATH
+            value: "{{inputs.parameters.cleanDataPath}}"
+        image: hybrid-workflows-ssh-client:latest
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: ssh-keys
+            mountPath: /root/.ssh
+            readOnly: true
+        command: ["/usr/local/bin/trigger-job.sh"]
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"

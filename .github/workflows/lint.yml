@@ -19,20 +19,10 @@ on:
       - 'go.mod'
       - 'go.sum'
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - 'api/**'
-      - 'cmd/**'
-      - 'config/**'
-      - 'internal/**'
-      - 'slurm-agent/**'
-      - 'test/**'
-      - '.custom-gcl.yml'
-      - '.dockerignore'
-      - 'Dockerfile'
-      - 'Makefile'
-      - 'go.mod'
-      - 'go.sum'
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   lint:
@@ -42,12 +32,40 @@ jobs:
       - name: Clone the code
         uses: actions/checkout@v5
 
+      - name: Detect operator-relevant changes
+        id: changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            relevant:
+              - '.github/workflows/**'
+              - 'api/**'
+              - 'cmd/**'
+              - 'config/**'
+              - 'internal/**'
+              - 'slurm-agent/**'
+              - 'test/**'
+              - '.custom-gcl.yml'
+              - '.dockerignore'
+              - 'Dockerfile'
+              - 'Makefile'
+              - 'go.mod'
+              - 'go.sum'
+
+      - name: Skip non-operator-only PR changes
+        if: github.event_name == 'pull_request' && steps.changes.outputs.relevant != 'true'
+        run: echo "No operator-relevant changes detected; skipping Lint."
+
       - name: Setup Go
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
       - name: Check linter configuration
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
         run: make lint-config
       - name: Run linter
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
         run: make lint

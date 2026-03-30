@@ -63,10 +63,10 @@ if [ "${SLURM_INPUT}" = "false" ]; then
     scp ${SSH_OPTS} -r /tmp/* "${SSH_USER}@${SSH_HOST}:${INPUT_FILE_PATH}/"
   fi
 else
-  SUFFIX=$(cat /tmp/slurm-job-out-path.txt)
+  UPSTREAM_INPUT_FILE_PATH=$(cat /tmp/slurm-job-out-path.txt)
 
   if [ "${INPUT_FILE_PATH:-NotSet}" = "NotSet" ]; then
-    INPUT_FILE_PATH="slurm-job-${SUFFIX}"
+    INPUT_FILE_PATH="${UPSTREAM_INPUT_FILE_PATH}"
   fi
 
   if [[ "${INPUT_FILE_PATH}" != /* ]]; then
@@ -90,7 +90,7 @@ else
 fi
 
 mkdir -p "${LOCAL_OUT_DIR}"
-echo "${SUFFIX}" > "${LOCAL_OUT_DIR}/slurm-job-out-path.txt"
+echo "${INPUT_FILE_PATH}" > "${LOCAL_OUT_DIR}/slurm-job-out-path.txt"
 
 echo "INPUT_FILE_PATH (remote): ${INPUT_FILE_PATH}"
 echo "LOCAL_OUT_DIR (pod): ${LOCAL_OUT_DIR}"

@@ -25,33 +25,23 @@ spec:
         container:
           image: busybox
           command: [sh, -c]
-          args: ["echo hello world | tee /tmp/file.txt"]
+          args: ["echo hello world 1 | tee /tmp/file1.txt && echo hello world 2 | tee /tmp/file2.txt"]
         outputs:
           parameters:
             - name: output-param-1
               valueFrom:
-                path: /tmp/file.txt
+                path: /tmp/file1.txt
           artifacts:
-            - name: file
-              path: /tmp/file.txt
+            - name: file1
+              path: /tmp/file1.txt
               s3:
-                key: Mnist-Dataset/data/my-dir/my-file
+                key: Mnist-Dataset/my-file1
               archive:
                 none: { }  
-
-    - name: generate2
-      type: k8s
-      jobSpec:
-        container:
-          image: busybox
-          command: [sh, -c]
-          args: ["echo hello world 2 | tee /tmp/file2.txt"]
-        outputs:
-          artifacts:
             - name: file2
               path: /tmp/file2.txt
               s3:
-                key: Mnist-Dataset/data/my-dir/my-file2
+                key: Mnist-Dataset/my-file2
               archive:
                 none: { }                
 
@@ -70,32 +60,37 @@ spec:
           args: ["cat /tmp/message/mnist.log"] 
       inputs:
         - name: message
-          from: model-training
+          from: model-training1
           type: artifact      
 
     - name: print-slurm-message-from-slurm-output
       type: slurm
       command: "cat mnist.log"
       inputs:
-        - from: model-training
+        - from: model-training1
 
-    - name: print-message-from-file
+    - name: print-message-from-files
       type: k8s
       jobSpec:
         inputs:
           artifacts:
-          - name: message
-            path: /tmp/message
+          - name: message1
+            path: /tmp/message1
+          - name: message2
+            path: /tmp/message2
         container:
           image: alpine:latest
           command: [sh, -c]
-          args: ["cat /tmp/message"] 
+          args: ["cat /tmp/message1 && cat /tmp/message2"] 
       inputs:
-        - name: message
-          from: generate.file   
-          type: artifact          
+        - name: message1
+          from: generate.file1   
+          type: artifact 
+        - name: message2
+          from: generate.file2   
+          type: artifact             
 
-    - name: print-message-from-input
+    - name: print-message-from-parameter
       type: k8s
       jobSpec:
         inputs:
@@ -111,7 +106,7 @@ spec:
           from: generate.output-param-1
           type: parameter
 
-    - name: model-training
+    - name: model-training1
       type: slurm
       command: "export LR=0.017 && export epochs={{tasks.gen-epochs.outputs.result}} && sbatch katib-train-local.slurm"
       inputs:
@@ -124,13 +119,12 @@ spec:
 
     - name: model-training2
       type: slurm
-      command: "export LR=0.017 && cat data/my-dir/my-file2 && cat data/my-dir/my-file && export epochs={{tasks.gen-epochs.outputs.result}} && echo $epochs && cat /tmp/mnist-job/mnist.log && sbatch katib-train-local.slurm"
+      command: "export LR=0.017 && cat my-file1 && cat my-file2 && export epochs={{tasks.gen-epochs.outputs.result}} && cat /tmp/mnist-job/mnist.log && sbatch katib-train-local.slurm"
       inputs:
         - s3key: Mnist-Dataset
         - from: gen-epochs
         - from: generate
-        - from: generate2
-        - from: model-training
+        - from: model-training1
       outputs:
         - name: outputFileName
           value: mnist.log

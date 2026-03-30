@@ -22,6 +22,7 @@ case "${MACHINE}" in
 esac
 
 BASH_COMPLETIONS_DIR="/usr/share/bash-completion/completions"
+INSTALL_OPTIONAL_DEV_TOOLS="${INSTALL_OPTIONAL_DEV_TOOLS:-false}"
 
 ${SUDO} apt-get update
 ${SUDO} apt-get install -y --no-install-recommends bash-completion ca-certificates curl unzip
@@ -55,12 +56,14 @@ install_tar_gz_bin() {
   fi
 }
 
-if ! command -v kind >/dev/null 2>&1; then
-  install_bin kind "https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-${ARCH}"
-fi
+if [[ "${INSTALL_OPTIONAL_DEV_TOOLS}" == "true" ]]; then
+  if ! command -v kind >/dev/null 2>&1; then
+    install_bin kind "https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-${ARCH}"
+  fi
 
-if ! command -v kubebuilder >/dev/null 2>&1; then
-  install_bin kubebuilder "https://go.kubebuilder.io/dl/latest/linux/${ARCH}"
+  if ! command -v kubebuilder >/dev/null 2>&1; then
+    install_bin kubebuilder "https://go.kubebuilder.io/dl/latest/linux/${ARCH}"
+  fi
 fi
 
 if ! command -v kubectl >/dev/null 2>&1; then
@@ -101,16 +104,6 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-if ! docker network inspect kind >/dev/null 2>&1; then
-  docker network create kind >/dev/null 2>&1 || true
-fi
-
-if command -v kind >/dev/null 2>&1; then
-  kind completion bash > "${BASH_COMPLETIONS_DIR}/kind" || true
-fi
-if command -v kubebuilder >/dev/null 2>&1; then
-  kubebuilder completion bash > "${BASH_COMPLETIONS_DIR}/kubebuilder" || true
-fi
 if command -v kubectl >/dev/null 2>&1; then
   kubectl completion bash > "${BASH_COMPLETIONS_DIR}/kubectl" || true
 fi
@@ -126,9 +119,13 @@ fi
 
 echo ""
 echo "Codespaces tools installed for the operator repo."
+if [[ "${INSTALL_OPTIONAL_DEV_TOOLS}" != "true" ]]; then
+  echo "Optional tools skipped: kind, kubebuilder."
+  echo "Set INSTALL_OPTIONAL_DEV_TOOLS=true before running post-install to include them."
+fi
 echo "Recommended next steps:"
 echo "  1. git clone https://github.com/PGpalt/hybrid-workflows-gitops.git ../hybrid-workflows-gitops"
-echo "  2. minikube start --driver=docker --cpus=4 --memory=8192 --disk-size=40g"
+echo "  2. minikube start --driver=docker --cpus=4 --memory=8192 --disk-size=10g"
 echo "  3. kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -"
 echo "  4. kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
 echo "  5. kubectl apply -f ../hybrid-workflows-gitops/bootstrap/root-application.yaml"

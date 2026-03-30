@@ -33,3 +33,4 @@ AGENTS.md
 # Local example dataset downloads
 examples/Datasets/GenomicData/*
 !examples/Datasets/GenomicData/download-sample-fastq.sh
+CODESPACES.md

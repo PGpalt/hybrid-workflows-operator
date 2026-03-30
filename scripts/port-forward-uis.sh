@@ -10,7 +10,6 @@ fi
 services=(
   "argocd argocd-server 8080:443 ArgoCD"
   "argo argo-server 2746:2746 ArgoWorkflows"
-  "argo minio 9000:9000 MinIOAPI"
   "argo minio-console 9001:9001 MinIOConsole"
   "kubeflow katib-ui 8081:80 KatibUI"
 )

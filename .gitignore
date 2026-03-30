@@ -34,3 +34,4 @@ AGENTS.md
 examples/Datasets/GenomicData/*
 !examples/Datasets/GenomicData/download-sample-fastq.sh
 CODESPACES.md
+.codex

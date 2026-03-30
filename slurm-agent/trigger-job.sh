@@ -100,13 +100,13 @@ echo "USE_WORKDIR: ${USE_WORKDIR}"
 output=$(rssh "cd \"${INPUT_FILE_PATH}\" && ${COMMAND}")
 echo "Submission output: ${output}"
 
-# Extract job ID (assumes: Submitted batch job <id>)
-job_id=$(echo "${output}" | awk '{print $4}')
-echo "Job submitted with ID: ${job_id}"
-
-if [ "$(echo "${output}" | awk '{print $1}')" = "Submitted" ]; then
+# Poll only when the command output indicates a submitted batch job.
+job_id=$(printf '%s\n' "${output}" | sed -nE 's/.*Submitted batch job[[:space:]]+([0-9]+).*/\1/p' | tail -n1)
+if [ -n "${job_id}" ]; then
+  echo "Job submitted with ID: ${job_id}"
   while rssh "squeue -j ${job_id}" | grep -q "${job_id}"; do
-    echo "Job ${job_id} is still running. Waiting..."
+    elapsed=$(rssh "squeue -j ${job_id} -h -o '%M'" | head -n1)
+    echo "Job ${job_id} is still running. Waiting... (${elapsed} elapsed)"
     sleep 5
   done
   echo "Job ${job_id} has completed."

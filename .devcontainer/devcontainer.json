@@ -1,35 +1,70 @@
 {
-  "name": "Kubebuilder DevContainer",
-  "image": "golang:1.25",
+  "name": "Hybrid Workflows Operator",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.25-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "moby": false,
       "dockerDefaultAddressPool": "base=172.30.0.0/16,size=24"
     },
     "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/common-utils:2": {
       "upgradePackages": true
     }
   },
-
-  "runArgs": ["--privileged", "--init"],
-
+  "runArgs": [
+    "--privileged",
+    "--init"
+  ],
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "forwardPorts": [
+    8080,
+    2746,
+    9000,
+    9001,
+    2220
+  ],
+  "portsAttributes": {
+    "8080": {
+      "label": "Argo CD",
+      "onAutoForward": "notify"
+    },
+    "2746": {
+      "label": "Argo Workflows",
+      "onAutoForward": "notify"
+    },
+    "9000": {
+      "label": "MinIO API",
+      "onAutoForward": "silent"
+    },
+    "9001": {
+      "label": "MinIO Console",
+      "onAutoForward": "notify"
+    },
+    "2220": {
+      "label": "Dummy Slurm SSH",
+      "onAutoForward": "silent"
+    }
+  },
   "customizations": {
     "vscode": {
       "settings": {
-        "terminal.integrated.shell.linux": "/bin/bash"
+        "terminal.integrated.defaultProfile.linux": "bash"
       },
       "extensions": [
         "ms-kubernetes-tools.vscode-kubernetes-tools",
-        "ms-azuretools.vscode-docker"
+        "ms-azuretools.vscode-docker",
+        "github.vscode-github-actions",
+        "redhat.vscode-yaml"
       ]
     }
   },
-
   "remoteEnv": {
     "GO111MODULE": "on"
   },
-
   "onCreateCommand": "bash .devcontainer/post-install.sh"
 }
-

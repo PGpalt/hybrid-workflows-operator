@@ -1,20 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-echo "===================================="
-echo "Kubebuilder DevContainer Setup"
-echo "===================================="
-
-# Verify running as root (required for installing to /usr/local/bin and /etc)
-if [ "$(id -u)" -ne 0 ]; then
-  echo "ERROR: This script must be run as root"
-  exit 1
+if [ "$(id -u)" -eq 0 ]; then
+  SUDO=""
+else
+  SUDO="sudo"
 fi
 
-echo ""
-echo "Detecting system architecture..."
-# Detect architecture using uname
-MACHINE=$(uname -m)
+MACHINE="$(uname -m)"
 case "${MACHINE}" in
   x86_64)
     ARCH="amd64"
@@ -23,131 +16,119 @@ case "${MACHINE}" in
     ARCH="arm64"
     ;;
   *)
-    echo "WARNING: Unsupported architecture ${MACHINE}, defaulting to amd64"
-    ARCH="amd64"
+    echo "Unsupported architecture ${MACHINE}" >&2
+    exit 1
     ;;
 esac
-echo "Architecture: ${ARCH}"
-
-echo ""
-echo "------------------------------------"
-echo "Setting up bash completion..."
-echo "------------------------------------"
 
 BASH_COMPLETIONS_DIR="/usr/share/bash-completion/completions"
 
-# Enable bash-completion in root's .bashrc (devcontainer runs as root)
-if ! grep -q "source /usr/share/bash-completion/bash_completion" ~/.bashrc 2>/dev/null; then
-  echo 'source /usr/share/bash-completion/bash_completion' >> ~/.bashrc
-  echo "Added bash-completion to .bashrc"
+${SUDO} apt-get update
+${SUDO} apt-get install -y --no-install-recommends bash-completion ca-certificates curl unzip
+
+if ! grep -q "bash_completion" "${HOME}/.bashrc" 2>/dev/null; then
+  echo 'source /usr/share/bash-completion/bash_completion' >> "${HOME}/.bashrc"
 fi
 
-echo ""
-echo "------------------------------------"
-echo "Installing development tools..."
-echo "------------------------------------"
-
-# Install kind
-if ! command -v kind &> /dev/null; then
-  echo "Installing kind..."
-  curl -Lo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/latest/kind-linux-${ARCH}"
-  chmod +x /usr/local/bin/kind
-  echo "kind installed successfully"
-fi
-
-# Generate kind bash completion
-if command -v kind &> /dev/null; then
-  if kind completion bash > "${BASH_COMPLETIONS_DIR}/kind" 2>/dev/null; then
-    echo "kind completion installed"
-  else
-    echo "WARNING: Failed to generate kind completion"
+install_bin() {
+  local name="$1"
+  local url="$2"
+  if ! command -v "${name}" >/dev/null 2>&1; then
+    echo "Installing ${name}..."
+    curl -fsSL "${url}" -o "/tmp/${name}"
+    ${SUDO} install -m 0755 "/tmp/${name}" "/usr/local/bin/${name}"
   fi
-fi
+}
 
-# Install kubebuilder
-if ! command -v kubebuilder &> /dev/null; then
-  echo "Installing kubebuilder..."
-  curl -Lo /usr/local/bin/kubebuilder "https://go.kubebuilder.io/dl/latest/linux/${ARCH}"
-  chmod +x /usr/local/bin/kubebuilder
-  echo "kubebuilder installed successfully"
-fi
-
-# Generate kubebuilder bash completion
-if command -v kubebuilder &> /dev/null; then
-  if kubebuilder completion bash > "${BASH_COMPLETIONS_DIR}/kubebuilder" 2>/dev/null; then
-    echo "kubebuilder completion installed"
-  else
-    echo "WARNING: Failed to generate kubebuilder completion"
+install_tar_gz_bin() {
+  local name="$1"
+  local url="$2"
+  local archive="/tmp/${name}.tar.gz"
+  local extract_dir="/tmp/${name}-extract"
+  if ! command -v "${name}" >/dev/null 2>&1; then
+    echo "Installing ${name}..."
+    rm -rf "${extract_dir}"
+    mkdir -p "${extract_dir}"
+    curl -fsSL "${url}" -o "${archive}"
+    tar -xzf "${archive}" -C "${extract_dir}"
+    ${SUDO} install -m 0755 "${extract_dir}/${name}" "/usr/local/bin/${name}"
   fi
+}
+
+if ! command -v kind >/dev/null 2>&1; then
+  install_bin kind "https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-${ARCH}"
 fi
 
-# Install kubectl
-if ! command -v kubectl &> /dev/null; then
-  echo "Installing kubectl..."
-  KUBECTL_VERSION=$(curl -Ls https://dl.k8s.io/release/stable.txt)
-  curl -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
-  chmod +x /usr/local/bin/kubectl
-  echo "kubectl installed successfully"
+if ! command -v kubebuilder >/dev/null 2>&1; then
+  install_bin kubebuilder "https://go.kubebuilder.io/dl/latest/linux/${ARCH}"
 fi
 
-# Generate kubectl bash completion
-if command -v kubectl &> /dev/null; then
-  if kubectl completion bash > "${BASH_COMPLETIONS_DIR}/kubectl" 2>/dev/null; then
-    echo "kubectl completion installed"
-  else
-    echo "WARNING: Failed to generate kubectl completion"
-  fi
+if ! command -v kubectl >/dev/null 2>&1; then
+  KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+  install_bin kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
 fi
 
-# Generate Docker bash completion
-if command -v docker &> /dev/null; then
-  if docker completion bash > "${BASH_COMPLETIONS_DIR}/docker" 2>/dev/null; then
-    echo "docker completion installed"
-  else
-    echo "WARNING: Failed to generate docker completion"
-  fi
+if ! command -v minikube >/dev/null 2>&1; then
+  install_bin minikube "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-${ARCH}"
 fi
 
-echo ""
-echo "------------------------------------"
-echo "Configuring Docker environment..."
-echo "------------------------------------"
+if ! command -v kustomize >/dev/null 2>&1; then
+  KUSTOMIZE_VERSION="v5.7.1"
+  KUSTOMIZE_URL="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_${ARCH}.tar.gz"
+  install_tar_gz_bin kustomize "${KUSTOMIZE_URL}"
+fi
 
-# Wait for Docker to be ready
-echo "Waiting for Docker to be ready..."
-for i in {1..30}; do
+if ! command -v helm >/dev/null 2>&1; then
+  HELM_VERSION="v3.18.6"
+  HELM_ARCHIVE="/tmp/helm.tar.gz"
+  HELM_EXTRACT_DIR="/tmp/helm-extract"
+  curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" -o "${HELM_ARCHIVE}"
+  rm -rf "${HELM_EXTRACT_DIR}"
+  mkdir -p "${HELM_EXTRACT_DIR}"
+  tar -xzf "${HELM_ARCHIVE}" -C "${HELM_EXTRACT_DIR}"
+  ${SUDO} install -m 0755 "${HELM_EXTRACT_DIR}/linux-${ARCH}/helm" /usr/local/bin/helm
+fi
+
+if ! command -v argocd >/dev/null 2>&1; then
+  ARGOCD_VERSION="v3.1.1"
+  install_bin argocd "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-${ARCH}"
+fi
+
+for i in $(seq 1 30); do
   if docker info >/dev/null 2>&1; then
-    echo "Docker is ready"
     break
-  fi
-  if [ "$i" -eq 30 ]; then
-    echo "WARNING: Docker not ready after 30s"
   fi
   sleep 1
 done
 
-# Create kind network (ignore if already exists)
 if ! docker network inspect kind >/dev/null 2>&1; then
-  if docker network create kind >/dev/null 2>&1; then
-    echo "Created kind network"
-  else
-    echo "WARNING: Failed to create kind network (may already exist)"
-  fi
+  docker network create kind >/dev/null 2>&1 || true
+fi
+
+if command -v kind >/dev/null 2>&1; then
+  kind completion bash > "${BASH_COMPLETIONS_DIR}/kind" || true
+fi
+if command -v kubebuilder >/dev/null 2>&1; then
+  kubebuilder completion bash > "${BASH_COMPLETIONS_DIR}/kubebuilder" || true
+fi
+if command -v kubectl >/dev/null 2>&1; then
+  kubectl completion bash > "${BASH_COMPLETIONS_DIR}/kubectl" || true
+fi
+if command -v minikube >/dev/null 2>&1; then
+  minikube completion bash > "${BASH_COMPLETIONS_DIR}/minikube" || true
+fi
+if command -v helm >/dev/null 2>&1; then
+  helm completion bash > "${BASH_COMPLETIONS_DIR}/helm" || true
+fi
+if command -v docker >/dev/null 2>&1; then
+  docker completion bash > "${BASH_COMPLETIONS_DIR}/docker" || true
 fi
 
 echo ""
-echo "------------------------------------"
-echo "Verifying installations..."
-echo "------------------------------------"
-kind version
-kubebuilder version
-kubectl version --client
-docker --version
-go version
-
-echo ""
-echo "===================================="
-echo "DevContainer ready!"
-echo "===================================="
-echo "All development tools installed successfully."
-echo "You can now start building Kubernetes operators."
+echo "Codespaces tools installed for the operator repo."
+echo "Recommended next steps:"
+echo "  1. git clone https://github.com/PGpalt/hybrid-workflows-gitops.git ../hybrid-workflows-gitops"
+echo "  2. minikube start --driver=docker --cpus=4 --memory=8192 --disk-size=40g"
+echo "  3. kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -"
+echo "  4. kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
+echo "  5. kubectl apply -f ../hybrid-workflows-gitops/bootstrap/root-application.yaml"

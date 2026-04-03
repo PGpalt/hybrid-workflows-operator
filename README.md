@@ -11,7 +11,7 @@
 	            ssh-keygen available
 	            start minikube
 	            run: bash scripts/setup.sh
-	    DevContainer or Github Codespaces:
+	    DevContainer or Github Codespaces with VsCode (Browser Port Forwarding not tested):
 	            start minikube
 	            run bash scripts/setup.sh
 				run bash scripts/port-forward-uis.sh and then use localhost or the Codespaces PORTS tab
@@ -23,3 +23,4 @@
 	        install or reuse the dummy Slurm container
 	        upload the example datasets to the MinIO bucket my-bucket
 	        create the SSH key and Kubernetes secrets used by the Slurm integration
+			You can find the credentials created with: cat ~/.config/hybrid-workflows-operator/dev-credentials.env

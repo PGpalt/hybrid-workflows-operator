@@ -22,5 +22,4 @@
 	        install or reuse the dummy Slurm container
 	        upload the example datasets to the MinIO bucket my-bucket
 	        create the SSH key and Kubernetes secrets used by the Slurm integration
-	        when running in a devcontainer or Codespaces, start NodePort relays so the services are reachable through localhost or the Codespaces PORTS tab
-	        print the service URLs and the credentials file path at the end
+	        when running in a devcontainer or Codespaces, run bash scripts/port-forward-uis.sh and then use localhost or the Codespaces PORTS tab

@@ -25,7 +25,7 @@ BASH_COMPLETIONS_DIR="/usr/share/bash-completion/completions"
 INSTALL_OPTIONAL_DEV_TOOLS="${INSTALL_OPTIONAL_DEV_TOOLS:-false}"
 
 ${SUDO} apt-get update
-${SUDO} apt-get install -y --no-install-recommends bash-completion ca-certificates curl socat unzip
+${SUDO} apt-get install -y --no-install-recommends bash-completion ca-certificates curl unzip
 
 if ! grep -q "bash_completion" "${HOME}/.bashrc" 2>/dev/null; then
   echo 'source /usr/share/bash-completion/bash_completion' >> "${HOME}/.bashrc"

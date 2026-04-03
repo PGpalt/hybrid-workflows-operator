@@ -25,7 +25,7 @@ BASH_COMPLETIONS_DIR="/usr/share/bash-completion/completions"
 INSTALL_OPTIONAL_DEV_TOOLS="${INSTALL_OPTIONAL_DEV_TOOLS:-false}"
 
 ${SUDO} apt-get update
-${SUDO} apt-get install -y --no-install-recommends bash-completion ca-certificates curl unzip
+${SUDO} apt-get install -y --no-install-recommends bash-completion ca-certificates curl socat unzip
 
 if ! grep -q "bash_completion" "${HOME}/.bashrc" 2>/dev/null; then
   echo 'source /usr/share/bash-completion/bash_completion' >> "${HOME}/.bashrc"
@@ -124,8 +124,4 @@ if [[ "${INSTALL_OPTIONAL_DEV_TOOLS}" != "true" ]]; then
   echo "Set INSTALL_OPTIONAL_DEV_TOOLS=true before running post-install to include them."
 fi
 echo "Recommended next steps:"
-echo "  1. git clone https://github.com/PGpalt/hybrid-workflows-gitops.git ../hybrid-workflows-gitops"
-echo "  2. minikube start --driver=docker --cpus=4 --memory=8192 --disk-size=10g"
-echo "  3. kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -"
-echo "  4. kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
-echo "  5. kubectl apply -f ../hybrid-workflows-gitops/bootstrap/root-application.yaml"
+echo "Start Minikube, then run bash scripts/setup.sh to install ArgoCD, bootstrap the platform, and generate local dev credentials."

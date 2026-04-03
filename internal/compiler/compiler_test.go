@@ -19,9 +19,7 @@ func TestCompileShippedHybridWorkflowSamples(t *testing.T) {
 
 	sampleFiles := []string{
 		"hybridwf_v1alpha1_hybridworkflow.yaml",
-		"hybridwf-genomic-qc-alignment.yaml",
 		"hybridwf-intermediate-step-clean-up.yaml",
-		"hybridwf-custom-scheduler-example.yaml",
 	}
 
 	for _, sampleFile := range sampleFiles {

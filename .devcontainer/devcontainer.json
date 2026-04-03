@@ -22,27 +22,32 @@
     "storage": "32gb"
   },
   "forwardPorts": [
-    8080,
-    2746,
-    9000,
-    9001,
+    32000,
+    32001,
+    32002,
+    32746,
+    30080,
     2220
   ],
   "portsAttributes": {
-    "8080": {
-      "label": "Argo CD",
-      "onAutoForward": "notify"
-    },
-    "2746": {
-      "label": "Argo Workflows",
-      "onAutoForward": "notify"
-    },
-    "9000": {
+    "32000": {
       "label": "MinIO API",
       "onAutoForward": "silent"
     },
-    "9001": {
+    "32001": {
       "label": "MinIO Console",
+      "onAutoForward": "notify"
+    },
+    "32002": {
+      "label": "Argo CD",
+      "onAutoForward": "notify"
+    },
+    "32746": {
+      "label": "Argo Workflows",
+      "onAutoForward": "notify"
+    },
+    "30080": {
+      "label": "Katib Frontend",
       "onAutoForward": "notify"
     },
     "2220": {

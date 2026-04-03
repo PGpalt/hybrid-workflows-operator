@@ -1,8 +1,5 @@
 ## Append samples of your project ##
 resources:
 - hybridwf_v1alpha1_hybridworkflow.yaml
-- katib-experiment.yaml
-- hybridwf-intermediate-step-clean-up.yaml
 - hybridwf-genomic-qc-alignment.yaml
-- hybridwf-custom-scheduler-example.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

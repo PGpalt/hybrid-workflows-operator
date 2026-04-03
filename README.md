@@ -14,6 +14,7 @@
 	    DevContainer or Github Codespaces:
 	            start minikube
 	            run bash scripts/setup.sh
+				run bash scripts/port-forward-uis.sh and then use localhost or the Codespaces PORTS tab
 	    setup.sh will:
 	        install ArgoCD
 	        apply the root ArgoCD application to bootstrap the platform stack and Operator
@@ -22,4 +23,3 @@
 	        install or reuse the dummy Slurm container
 	        upload the example datasets to the MinIO bucket my-bucket
 	        create the SSH key and Kubernetes secrets used by the Slurm integration
-	        when running in a devcontainer or Codespaces, run bash scripts/port-forward-uis.sh and then use localhost or the Codespaces PORTS tab

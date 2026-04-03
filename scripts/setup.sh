@@ -10,8 +10,6 @@ argocd_nodeport="${ARGOCD_NODEPORT:-32002}"
 argocd_password="${ARGOCD_PASSWORD:-}"
 argocd_version="${ARGOCD_VERSION:-v3.1.1}"
 slurm_container_name="${SLURM_CONTAINER_NAME:-slurm-container}"
-relay_log="${RELAY_LOG:-${TMPDIR:-/tmp}/hybrid-workflows-nodeport-relay.log}"
-start_nodeport_relays="${START_NODEPORT_RELAYS:-auto}"
 minio_bucket="${MINIO_BUCKET:-my-bucket}"
 minio_access_key="${MINIO_ACCESS_KEY:-}"
 minio_secret_key="${MINIO_SECRET_KEY:-}"
@@ -222,20 +220,9 @@ require_running_minikube() {
   fi
 }
 
-if [[ "${start_nodeport_relays}" == "auto" ]]; then
-  if is_container_runtime; then
-    start_nodeport_relays="true"
-  else
-    start_nodeport_relays="false"
-  fi
-fi
-
 for command_name in curl git minikube kubectl docker ssh-keygen; do
   require_command "${command_name}"
 done
-if [[ "${start_nodeport_relays}" == "true" ]]; then
-  require_command socat
-fi
 
 install_argocd_if_missing
 load_or_generate_credentials
@@ -306,23 +293,6 @@ wait_for_service argo minio-console
 
 upload_example_datasets "$(minikube ip)" "${resolved_minio_api_nodeport}"
 
-if [[ "${start_nodeport_relays}" == "true" ]]; then
-  nohup env \
-    ARGOCD_NODEPORT="${resolved_argocd_nodeport}" \
-    ARGO_WORKFLOWS_NODEPORT="${resolved_argo_workflows_nodeport}" \
-    MINIO_API_NODEPORT="${resolved_minio_api_nodeport}" \
-    MINIO_CONSOLE_NODEPORT="${resolved_minio_console_nodeport}" \
-    KATIB_NODEPORT="${resolved_katib_nodeport}" \
-    bash "${repo_root}/scripts/relay-nodeports.sh" "$(minikube ip)" >"${relay_log}" 2>&1 &
-  relay_pid=$!
-  sleep 3
-  if ! kill -0 "${relay_pid}" >/dev/null 2>&1; then
-    echo "Failed to start NodePort relays. Log output:" >&2
-    cat "${relay_log}" >&2
-    exit 1
-  fi
-fi
-
 mkdir -p "${ssh_dir}"
 chmod 700 "${ssh_dir}"
 
@@ -347,32 +317,32 @@ kubectl -n argo create secret generic slurm-ssh-key \
 
 kubectl -n argo apply -f "${repo_root}/secret-templates/ssh-creds-example.yaml"
 
-if [[ "${start_nodeport_relays}" == "true" ]]; then
-  browser_host="127.0.0.1"
-else
-  browser_host="$(minikube ip)"
-fi
-
 if [[ -n "${CODESPACES:-}" ]]; then
-  echo "Running in GitHub Codespaces. Open these services from the PORTS tab using the forwarded port URLs."
-elif [[ "${start_nodeport_relays}" == "true" ]]; then
-  echo "Running in a devcontainer. Open these services from your local browser using the relayed localhost ports below."
+  echo "Running in GitHub Codespaces."
+  echo "Next step: run bash scripts/port-forward-uis.sh in a separate terminal."
+  echo "Then open the forwarded ports from the PORTS tab."
+  echo "Expected forwarded ports: ArgoCD 8080, Argo Workflows 2746, MinIO Console 9001, Katib 8081."
+elif is_container_runtime; then
+  echo "Running in a devcontainer."
+  echo "Next step: run bash scripts/port-forward-uis.sh in a separate terminal."
+  echo "Then open these localhost URLs from your browser:"
+  echo "ArgoCD Server: http://127.0.0.1:8080"
+  echo "Argo Workflows Server: http://127.0.0.1:2746"
+  echo "MinIO Console: http://127.0.0.1:9001"
+  echo "Katib Frontend: http://127.0.0.1:8081/katib/"
 else
   echo "Running on the local host. Open these services using the Minikube IP and NodePorts below."
+  echo "ArgoCD Server: https://$(minikube ip):${resolved_argocd_nodeport}"
+  echo "Argo Workflows Server: https://$(minikube ip):${resolved_argo_workflows_nodeport}"
+  echo "MinIO Console: https://$(minikube ip):${resolved_minio_console_nodeport}"
+  echo "Katib Frontend: https://$(minikube ip):${resolved_katib_nodeport}/katib/"
 fi
 
-echo "ArgoCD Server: https://${browser_host}:${resolved_argocd_nodeport}"
 echo "ArgoCD Username: admin"
 echo "ArgoCD Password: ${argocd_password}"
-echo "Argo Workflows Server: https://${browser_host}:${resolved_argo_workflows_nodeport}"
-echo "MinIO Console: https://${browser_host}:${resolved_minio_console_nodeport}"
 echo "MinIO Username: ${minio_access_key}"
 echo "MinIO Password: ${minio_secret_key}"
 echo "Datasets uploaded to MinIO bucket: ${minio_bucket}"
-echo "Katib Frontend: https://${browser_host}:${resolved_katib_nodeport}/katib/"
 echo "Setup complete."
-if [[ "${start_nodeport_relays}" == "true" ]]; then
-  echo "Relay log (if needed): ${relay_log}"
-fi
 echo "Credentials file: ${credentials_file}"
 echo "SSH private key: ${ssh_key_path}"

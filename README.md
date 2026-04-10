@@ -15,6 +15,9 @@
 	            start minikube
 	            run bash scripts/setup.sh
 				run bash scripts/port-forward-uis.sh and then use localhost or the Codespaces PORTS tab
+	            Codespaces note:
+	                .devcontainer/devcontainer.json requests access to PGpalt/hybrid-workflows-gitops and PGpalt/hybrid-workflows-infra.
+	                If you fork this project or use different repo names, update those repository entries before creating a new Codespace.
 	    setup.sh will:
 	        install ArgoCD
 	        apply the root ArgoCD application to bootstrap the platform stack and Operator

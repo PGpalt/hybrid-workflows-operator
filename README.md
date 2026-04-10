@@ -11,7 +11,7 @@
 	            ssh-keygen available
 	            start minikube
 	            run: bash scripts/setup.sh
-	    DevContainer or Github Codespaces with VsCode (Browser Port Forwarding not tested):
+	    DevContainer or Github Codespaces with VsCode (Browser Codespaces not Tested):
 	            start minikube
 	            run bash scripts/setup.sh
 				run bash scripts/port-forward-uis.sh and then use localhost or the Codespaces PORTS tab

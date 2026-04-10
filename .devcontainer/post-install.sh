@@ -56,6 +56,21 @@ install_tar_gz_bin() {
   fi
 }
 
+install_zip_bin() {
+  local name="$1"
+  local url="$2"
+  local archive="/tmp/${name}.zip"
+  local extract_dir="/tmp/${name}-extract"
+  if ! command -v "${name}" >/dev/null 2>&1; then
+    echo "Installing ${name}..."
+    rm -rf "${extract_dir}"
+    mkdir -p "${extract_dir}"
+    curl -fsSL "${url}" -o "${archive}"
+    unzip -oq "${archive}" -d "${extract_dir}"
+    ${SUDO} install -m 0755 "${extract_dir}/${name}" "/usr/local/bin/${name}"
+  fi
+}
+
 if [[ "${INSTALL_OPTIONAL_DEV_TOOLS}" == "true" ]]; then
   if ! command -v kind >/dev/null 2>&1; then
     install_bin kind "https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-${ARCH}"
@@ -92,6 +107,15 @@ if ! command -v helm >/dev/null 2>&1; then
   ${SUDO} install -m 0755 "${HELM_EXTRACT_DIR}/linux-${ARCH}/helm" /usr/local/bin/helm
 fi
 
+if ! command -v terraform >/dev/null 2>&1; then
+  TERRAFORM_VERSION="$(curl -fsSL https://checkpoint-api.hashicorp.com/v1/check/terraform | sed -n 's/.*"current_version":"\([^\"]*\)".*/\1/p')"
+  if [[ -z "${TERRAFORM_VERSION}" ]]; then
+    echo "Failed to determine the current Terraform version." >&2
+    exit 1
+  fi
+  install_zip_bin terraform "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${ARCH}.zip"
+fi
+
 if ! command -v argocd >/dev/null 2>&1; then
   ARGOCD_VERSION="v3.1.1"
   install_bin argocd "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-${ARCH}"
@@ -124,4 +148,4 @@ if [[ "${INSTALL_OPTIONAL_DEV_TOOLS}" != "true" ]]; then
   echo "Set INSTALL_OPTIONAL_DEV_TOOLS=true before running post-install to include them."
 fi
 echo "Recommended next steps:"
-echo "Start Minikube, then run bash scripts/setup.sh to install ArgoCD, bootstrap the platform, and generate local dev credentials."
+echo "Start Minikube, then use the operator and infra repo workflows to bootstrap the platform."

@@ -56,6 +56,24 @@
     }
   },
   "customizations": {
+    "codespaces": {
+      "repositories": {
+        "PGpalt/hybrid-workflows-gitops": {
+          "permissions": {
+            "contents": "write",
+            "pull_requests": "write",
+            "workflows": "write"
+          }
+        },
+        "PGpalt/hybrid-workflows-infra": {
+          "permissions": {
+            "contents": "write",
+            "pull_requests": "write",
+            "workflows": "write"
+          }
+        }
+      }
+    },    
     "vscode": {
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash"

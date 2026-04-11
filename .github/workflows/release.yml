@@ -110,6 +110,8 @@ jobs:
       if: github.ref == 'refs/heads/main'
       env:
         GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
+        GITOPS_REPO: ${{ vars.GITOPS_REPO }}
+        GITOPS_REPO_BRANCH: ${{ vars.GITOPS_REPO_BRANCH }}
       shell: bash
       run: |
         if [[ -z "${GITOPS_REPO_TOKEN}" ]]; then
@@ -117,7 +119,12 @@ jobs:
           exit 0
         fi
 
-        git clone "https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/PGpalt/hybrid-workflows-gitops.git" /tmp/hybrid-workflows-gitops
+        gitops_repo="${GITOPS_REPO:-${GITHUB_REPOSITORY_OWNER}/hybrid-workflows-gitops}"
+        gitops_repo_branch="${GITOPS_REPO_BRANCH:-main}"
+
+        echo "Promoting operator manifests to ${gitops_repo}@${gitops_repo_branch}"
+
+        git clone "https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/${gitops_repo}.git" /tmp/hybrid-workflows-gitops
         cd /tmp/hybrid-workflows-gitops
 
         overlay_file="apps/hybrid-workflows-operator/overlays/dev/kustomization.yaml"
@@ -136,4 +143,4 @@ jobs:
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add "${overlay_file}" "${installer_file}"
         git commit -m "chore(operator): promote hybrid-workflows-operator to ${{ steps.vars.outputs.sha_tag }}"
-        git push origin HEAD:main
+        git push origin HEAD:"${gitops_repo_branch}"

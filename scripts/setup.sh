@@ -57,6 +57,14 @@ get_nodeport() {
   echo "${nodeport}"
 }
 
+get_optional_nodeport() {
+  local namespace="$1"
+  local service="$2"
+  local port="$3"
+
+  kubectl get svc "${service}" -n "${namespace}" -o jsonpath="{.spec.ports[?(@.port==${port})].nodePort}" 2>/dev/null || true
+}
+
 wait_for_secret() {
   local namespace="$1"
   local secret_name="$2"
@@ -170,7 +178,7 @@ resolved_argocd_nodeport="$(get_nodeport "${argocd_namespace}" argocd-server 443
 resolved_argo_workflows_nodeport="$(get_nodeport "${argo_namespace}" argo-server 2746)"
 resolved_minio_api_nodeport="$(get_nodeport "${argo_namespace}" minio 9000)"
 resolved_minio_console_nodeport="$(get_nodeport "${argo_namespace}" minio-console 9001)"
-resolved_katib_nodeport="$(get_nodeport "${katib_namespace}" katib-ui 80)"
+resolved_katib_nodeport="$(get_optional_nodeport "${katib_namespace}" katib-ui 80)"
 
 upload_example_datasets "$(minikube ip)" "${resolved_minio_api_nodeport}"
 
@@ -216,7 +224,11 @@ else
   echo "ArgoCD Server: https://$(minikube ip):${resolved_argocd_nodeport}"
   echo "Argo Workflows Server: https://$(minikube ip):${resolved_argo_workflows_nodeport}"
   echo "MinIO Console: https://$(minikube ip):${resolved_minio_console_nodeport}"
-  echo "Katib Frontend: https://$(minikube ip):${resolved_katib_nodeport}/katib/"
+  if [[ -n "${resolved_katib_nodeport}" ]]; then
+    echo "Katib Frontend: https://$(minikube ip):${resolved_katib_nodeport}/katib/"
+  else
+    echo "Katib Frontend: no NodePort configured; use bash scripts/port-forward-uis.sh and open http://127.0.0.1:8081/katib/"
+  fi
 fi
 
 echo "ArgoCD Username: admin"

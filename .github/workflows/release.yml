@@ -112,6 +112,7 @@ jobs:
         GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
         GITOPS_REPO: ${{ vars.GITOPS_REPO }}
         GITOPS_REPO_BRANCH: ${{ vars.GITOPS_REPO_BRANCH }}
+        GITOPS_OPERATOR_OVERLAY_FILE: ${{ vars.GITOPS_OPERATOR_OVERLAY_FILE }}
       shell: bash
       run: |
         if [[ -z "${GITOPS_REPO_TOKEN}" ]]; then
@@ -127,9 +128,20 @@ jobs:
         git clone "https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/${gitops_repo}.git" /tmp/hybrid-workflows-gitops
         cd /tmp/hybrid-workflows-gitops
 
-        overlay_file="apps/hybrid-workflows-operator/overlays/dev/kustomization.yaml"
+        overlay_file="${GITOPS_OPERATOR_OVERLAY_FILE:-apps/hybrid-workflows-operator/overlays/minikube/kustomization.yaml}"
         installer_file="apps/hybrid-workflows-operator/base/install.yaml"
         image_ref="${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha_tag }}"
+
+        if [[ ! -f "${overlay_file}" ]]; then
+          echo "Overlay file ${overlay_file} does not exist in ${gitops_repo}."
+          echo "Set the GITOPS_OPERATOR_OVERLAY_FILE repo variable to a valid path."
+          exit 1
+        fi
+
+        if [[ ! -f "${installer_file}" ]]; then
+          echo "Installer file ${installer_file} does not exist in ${gitops_repo}."
+          exit 1
+        fi
 
         cp "${GITHUB_WORKSPACE}/dist/install.yaml" "${installer_file}"
         sed -i "s#^\([[:space:]]*newTag:[[:space:]]*\).*#\1${{ steps.vars.outputs.sha_tag }}#" "${overlay_file}"

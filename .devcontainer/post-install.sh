@@ -11,9 +11,11 @@ MACHINE="$(uname -m)"
 case "${MACHINE}" in
   x86_64)
     ARCH="amd64"
+    AWSCLI_ARCH="x86_64"
     ;;
   aarch64|arm64)
     ARCH="arm64"
+    AWSCLI_ARCH="aarch64"
     ;;
   *)
     echo "Unsupported architecture ${MACHINE}" >&2
@@ -25,7 +27,7 @@ BASH_COMPLETIONS_DIR="/usr/share/bash-completion/completions"
 INSTALL_OPTIONAL_DEV_TOOLS="${INSTALL_OPTIONAL_DEV_TOOLS:-false}"
 
 ${SUDO} apt-get update
-${SUDO} apt-get install -y --no-install-recommends bash-completion ca-certificates curl unzip
+${SUDO} apt-get install -y --no-install-recommends bash-completion ca-certificates curl jq unzip
 
 if ! grep -q "bash_completion" "${HOME}/.bashrc" 2>/dev/null; then
   echo 'source /usr/share/bash-completion/bash_completion' >> "${HOME}/.bashrc"
@@ -68,6 +70,19 @@ install_zip_bin() {
     curl -fsSL "${url}" -o "${archive}"
     unzip -oq "${archive}" -d "${extract_dir}"
     ${SUDO} install -m 0755 "${extract_dir}/${name}" "/usr/local/bin/${name}"
+  fi
+}
+
+install_aws_cli() {
+  local archive="/tmp/awscliv2.zip"
+  local extract_dir="/tmp/awscli-extract"
+  if ! command -v aws >/dev/null 2>&1; then
+    echo "Installing aws..."
+    rm -rf "${extract_dir}"
+    mkdir -p "${extract_dir}"
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWSCLI_ARCH}.zip" -o "${archive}"
+    unzip -oq "${archive}" -d "${extract_dir}"
+    ${SUDO} "${extract_dir}/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
   fi
 }
 
@@ -116,6 +131,8 @@ if ! command -v terraform >/dev/null 2>&1; then
   install_zip_bin terraform "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${ARCH}.zip"
 fi
 
+install_aws_cli
+
 if ! command -v argocd >/dev/null 2>&1; then
   ARGOCD_VERSION="v3.1.1"
   install_bin argocd "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-${ARCH}"
@@ -147,5 +164,8 @@ if [[ "${INSTALL_OPTIONAL_DEV_TOOLS}" != "true" ]]; then
   echo "Optional tools skipped: kind, kubebuilder."
   echo "Set INSTALL_OPTIONAL_DEV_TOOLS=true before running post-install to include them."
 fi
+echo "AWS CLI and jq are installed for the EKS/Terraform workflow."
 echo "Recommended next steps:"
+echo "Configure AWS credentials, for example: aws configure --profile eks-dev"
+echo "Then export AWS_PROFILE=eks-dev and AWS_REGION=eu-north-1 before running Terraform against EKS."
 echo "Start Minikube, then use the operator and infra repo workflows to bootstrap the platform."

@@ -83,12 +83,14 @@
         "ms-kubernetes-tools.vscode-kubernetes-tools",
         "ms-azuretools.vscode-docker",
         "github.vscode-github-actions",
+        "amazonwebservices.aws-toolkit-vscode",
         "redhat.vscode-yaml"
       ]
     }
   },
   "remoteEnv": {
-    "GO111MODULE": "on"
+    "GO111MODULE": "on",
+    "AWS_PAGER": ""
   },
   "onCreateCommand": "bash .devcontainer/post-install.sh"
 }

@@ -33,6 +33,19 @@ bash scripts/port-forward-uis.sh
 
 Use localhost or the Codespaces PORTS tab for the forwarded UIs.
 
+The operator devcontainer now installs `aws`, `terraform`, `kubectl`, `helm`,
+and `jq` so you can also drive the EKS demo workflow from Codespaces. The
+simplest AWS setup inside the container is:
+
+```bash
+aws configure --profile eks-dev
+export AWS_PROFILE=eks-dev
+export AWS_REGION=eu-north-1
+```
+
+After that, you can use the sibling infra repo Terraform environments against
+EKS from the same Codespace.
+
 Codespaces note:
 
 - `.devcontainer/devcontainer.json` requests access to `PGpalt/hybrid-workflows-gitops` and `PGpalt/hybrid-workflows-infra`

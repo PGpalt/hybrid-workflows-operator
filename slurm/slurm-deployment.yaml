@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slurm-demo
+  namespace: argo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slurm-demo
+  template:
+    metadata:
+      labels:
+        app: slurm-demo
+    spec:
+      hostname: slurmctl
+      containers:
+        - name: slurm
+          image: ghcr.io/<your-user>/hybrid-workflows-slurm-demo:<tag>
+          ports:
+            - containerPort: 22
+              name: ssh
+          securityContext:
+            capabilities:
+              add:
+                - SYS_ADMIN
+          volumeMounts:
+            - name: ssh-authorized-key
+              mountPath: /root/.ssh
+              readOnly: true
+          resources:
+            requests:
+              cpu: "500"
+              memory: "1Gi"
+            limits:
+              cpu:  "1"
+              memory: "1536Mi"
+      volumes:
+        - name: ssh-authorized-key
+          secret:
+            secretName: slurm-authorized-key
+            defaultMode: 0600
+            items:
+              - key: authorized_keys
+                path: authorized_keys

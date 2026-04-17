@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: slurm-demo
+  namespace: argo
+spec:
+  selector:
+    app: slurm-demo
+  ports:
+    - name: ssh
+      port: 22
+      targetPort: 22
+  type: ClusterIP

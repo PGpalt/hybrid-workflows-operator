@@ -141,15 +141,26 @@ jobs:
         git clone "https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/${gitops_repo}.git" /tmp/hybrid-workflows-gitops
         cd /tmp/hybrid-workflows-gitops
 
-        overlay_file="${GITOPS_OPERATOR_OVERLAY_FILE:-apps/hybrid-workflows-operator/overlays/minikube/kustomization.yaml}"
         installer_file="apps/hybrid-workflows-operator/base/install.yaml"
         image_ref="${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha_tag }}"
 
-        if [[ ! -f "${overlay_file}" ]]; then
-          echo "Overlay file ${overlay_file} does not exist in ${gitops_repo}."
-          echo "Set the GITOPS_OPERATOR_OVERLAY_FILE repo variable to a valid path."
-          exit 1
+        if [[ -n "${GITOPS_OPERATOR_OVERLAY_FILE}" ]]; then
+          overlay_files=("${GITOPS_OPERATOR_OVERLAY_FILE}")
+        else
+          overlay_files=(
+            "apps/hybrid-workflows-operator/overlays/minikube/kustomization.yaml"
+            "apps/hybrid-workflows-operator/overlays/eks-dev/kustomization.yaml"
+            "apps/hybrid-workflows-operator/overlays/eks-prod/kustomization.yaml"
+          )
         fi
+
+        for overlay_file in "${overlay_files[@]}"; do
+          if [[ ! -f "${overlay_file}" ]]; then
+            echo "Overlay file ${overlay_file} does not exist in ${gitops_repo}."
+            echo "Set the GITOPS_OPERATOR_OVERLAY_FILE repo variable to a valid path."
+            exit 1
+          fi
+        done
 
         if [[ ! -f "${installer_file}" ]]; then
           echo "Installer file ${installer_file} does not exist in ${gitops_repo}."
@@ -157,15 +168,18 @@ jobs:
         fi
 
         cp "${GITHUB_WORKSPACE}/dist/install.yaml" "${installer_file}"
-        sed -i "s#^\([[:space:]]*newTag:[[:space:]]*\).*#\1${{ steps.vars.outputs.sha_tag }}#" "${overlay_file}"
 
-        if git diff --quiet -- "${overlay_file}" "${installer_file}"; then
+        for overlay_file in "${overlay_files[@]}"; do
+          sed -i "s#^\([[:space:]]*newTag:[[:space:]]*\).*#\1${{ steps.vars.outputs.sha_tag }}#" "${overlay_file}"
+        done
+
+        if git diff --quiet -- "${overlay_files[@]}" "${installer_file}"; then
           echo "GitOps repo already points at ${image_ref} with the latest installer manifest; nothing to do."
           exit 0
         fi
 
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add "${overlay_file}" "${installer_file}"
+        git add "${overlay_files[@]}" "${installer_file}"
         git commit -m "chore(operator): promote hybrid-workflows-operator to ${{ steps.vars.outputs.sha_tag }}"
         git push origin HEAD:"${gitops_repo_branch}"

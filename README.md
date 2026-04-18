@@ -60,7 +60,7 @@ own repos:
 - set the operator repo secret `GITOPS_REPO_TOKEN` if you want the release workflow to promote manifests into your GitOps repo
 - optionally set the operator repo variable `GITOPS_REPO` to `owner/repo`; if unset, the release workflow defaults to `${GITHUB_REPOSITORY_OWNER}/hybrid-workflows-gitops`
 - optionally set the operator repo variable `GITOPS_REPO_BRANCH`; if unset, the release workflow pushes to `main`
-- optionally set the operator repo variable `GITOPS_OPERATOR_OVERLAY_FILE`; if unset, the release workflow updates `apps/hybrid-workflows-operator/overlays/minikube/kustomization.yaml`
+- optionally set the operator repo variable `GITOPS_OPERATOR_OVERLAY_FILE`; if unset, the release workflow updates all three operator overlays: `minikube`, `eks-dev`, and `eks-prod`
 - update the sibling infra repo configuration if your GitOps repo URL is not `https://github.com/<owner>/hybrid-workflows-gitops.git`
 - update the sibling GitOps repo if you want committed `repoURL` fields or image names to point at your own forked repos and registries
 

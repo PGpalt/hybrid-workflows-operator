@@ -112,8 +112,9 @@ RUN mkdir -p /etc/slurm /var/log/slurm /var/spool/slurmctld /var/spool/slurmd &&
 COPY slurm.conf /etc/slurm/slurm.conf
 RUN chown slurm:slurm /etc/slurm/slurm.conf && chmod 0644 /etc/slurm/slurm.conf
 
-# 11) OpenSSH server (keep 22 inside; map host 2220 -> 22 at runtime)
+# 11) OpenSSH server on 2220 so cross-node pod traffic stays on an allowed port
 RUN ssh-keygen -A \
+ && grep -q '^Port 2220$' /etc/ssh/sshd_config || echo 'Port 2220' >> /etc/ssh/sshd_config \
  && sed -ri 's/^#?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config \
  && sed -ri 's/^#?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
  && echo 'root:root' | chpasswd \

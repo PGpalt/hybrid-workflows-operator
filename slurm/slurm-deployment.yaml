@@ -17,9 +17,10 @@ spec:
       containers:
         - name: slurm
           image: ghcr.io/pgpalt/slurm-container:main
-          command: ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]
+          stdin: true
+          tty: true
           ports:
-            - containerPort: 22
+            - containerPort: 2220
               name: ssh
           securityContext:
             capabilities:

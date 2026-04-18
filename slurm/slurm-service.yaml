@@ -8,6 +8,6 @@ spec:
     app: slurm-container
   ports:
     - name: ssh
-      port: 22
-      targetPort: 22
+      port: 2220
+      targetPort: 2220
   type: ClusterIP

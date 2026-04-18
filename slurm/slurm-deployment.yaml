@@ -16,7 +16,7 @@ spec:
       hostname: slurmctl
       containers:
         - name: slurm
-          image: ghcr.io/<your-user>/hybrid-workflows-slurm-demo:<tag>
+          image: ghcr.io/PGpalt/hybrid-workflows-slurm-demo:latest
           ports:
             - containerPort: 22
               name: ssh

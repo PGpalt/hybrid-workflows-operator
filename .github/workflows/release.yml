@@ -12,6 +12,7 @@ on:
     - 'cmd/**'
     - 'config/**'
     - 'internal/**'
+    - 'slurm/**'
     - 'slurm-agent/**'
     - 'test/**'
     - '.custom-gcl.yml'
@@ -45,6 +46,7 @@ jobs:
       shell: bash
       run: |
         echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        echo "slurm_image=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/slurm-container" >> "$GITHUB_OUTPUT"
         echo "ssh_image=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/hybrid-workflows-ssh-client" >> "$GITHUB_OUTPUT"
         echo "sha_tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
         if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
@@ -90,6 +92,17 @@ jobs:
         tags: |
           ${{ steps.vars.outputs.ssh_image }}:${{ steps.vars.outputs.primary_tag }}
           ${{ steps.vars.outputs.ssh_image }}:${{ steps.vars.outputs.sha_tag }}
+
+    - name: Build and push Slurm demo image
+      uses: docker/build-push-action@v6
+      with:
+        context: ./slurm
+        file: ./slurm/Dockerfile
+        push: true
+        tags: |
+          ${{ steps.vars.outputs.slurm_image }}:main
+        labels: |
+          org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
     - name: Generate installer manifest
       run: make build-installer IMG=${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha_tag }} SSH_CLIENT_IMG=${{ steps.vars.outputs.ssh_image }}:${{ steps.vars.outputs.sha_tag }}

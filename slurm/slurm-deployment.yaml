@@ -1,22 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: slurm-demo
+  name: slurm-container
   namespace: argo
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: slurm-demo
+      app: slurm-container
   template:
     metadata:
       labels:
-        app: slurm-demo
+        app: slurm-container
     spec:
       hostname: slurmctl
       containers:
         - name: slurm
-          image: ghcr.io/PGpalt/hybrid-workflows-slurm-demo:latest
+          image: ghcr.io/pgpalt/slurm-container:main
+          command: ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]
           ports:
             - containerPort: 22
               name: ssh
@@ -30,7 +31,7 @@ spec:
               readOnly: true
           resources:
             requests:
-              cpu: "500"
+              cpu: "1"
               memory: "1Gi"
             limits:
               cpu:  "1"

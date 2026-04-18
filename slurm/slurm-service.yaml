@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: slurm-demo
+  name: slurm-container
   namespace: argo
 spec:
   selector:
-    app: slurm-demo
+    app: slurm-container
   ports:
     - name: ssh
       port: 22

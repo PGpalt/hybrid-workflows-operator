@@ -1,7 +1,6 @@
 # Hybrid Workflows Operator
 
-This is a dev-only implementation, not production ready, and it is currently
-tailored to Minikube with the Docker driver.
+Sibling repos: hybrid-workflows-gitops and hybrid-workflows-infra
 
 ## Setup Guide
 
@@ -21,7 +20,7 @@ Then run:
 bash scripts/setup.sh
 ```
 
-### DevContainer or GitHub Codespaces with VS Code
+### DevContainer or GitHub Codespaces with VS Code for Minikube overlay
 
 Bootstrap the cluster first from the sibling `hybrid-workflows-infra` repo,
 then run:

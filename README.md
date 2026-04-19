@@ -17,10 +17,11 @@ Requirements:
 Then run:
 
 ```bash
-bash scripts/setup.sh
+bash scripts/setup.sh 
+bash scripts/port-forward-uis.sh
 ```
 
-### DevContainer or GitHub Codespaces with VS Code for Minikube overlay
+### Local DevContainer or GitHub Codespaces with VS Code for Minikube overlay
 
 Bootstrap the cluster first from the sibling `hybrid-workflows-infra` repo,
 then run:
@@ -72,7 +73,7 @@ own repos:
 - update the sibling infra repo configuration if your GitOps repo URL is not `https://github.com/<owner>/hybrid-workflows-gitops.git`
 - update the sibling GitOps repo if you want committed `repoURL` fields or image names to point at your own forked repos and registries
 
-## What `setup.sh` Does Now
+## What `setup.sh` Does Now (Used for Minikube local demo)
 
 - installs or reuses the dummy Slurm container
 - reads the existing MinIO credentials from the cluster and uploads the example datasets to `my-bucket`
@@ -83,3 +84,7 @@ own repos:
 
 - Argo CD, the root Application, and MinIO bootstrap credentials are already managed by `hybrid-workflows-infra`
 - the Argo CD admin password is already managed by `hybrid-workflows-infra`
+
+## AWS DEMO. For a dummy slurm pod in AWS run: setup-aws-slurm-deployment.sh
+
+- Generates the required ssh key pair, k8s deployment, service and secrets

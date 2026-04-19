@@ -32,9 +32,10 @@ bash scripts/port-forward-uis.sh
 
 Use localhost or the Codespaces PORTS tab for the forwarded UIs.
 
-The operator devcontainer now installs `aws`, `terraform`, `kubectl`, `helm`,
-and `jq` so you can also drive the EKS demo workflow from Codespaces. The
-simplest AWS setup inside the container is:
+The image includes `aws`, `terraform`, `kubectl`, `minikube`, `helm`, `kustomize`,
+`argocd`, and `jq`, so you can also drive the EKS demo workflow from
+Codespaces or a local devcontainer. The simplest AWS setup inside the container
+is:
 
 ```bash
 aws configure --profile eks-dev
@@ -49,6 +50,14 @@ Codespaces note:
 
 - `.devcontainer/devcontainer.json` requests access to `PGpalt/hybrid-workflows-gitops` and `PGpalt/hybrid-workflows-infra`
 - if you fork this project or use different repo names, update those repository entries before creating a new Codespace
+
+Local devcontainer note:
+
+- the devcontainer mounts the parent directory of this repo into `/workspaces`, so sibling repos are available side by side inside the container
+- if `hybrid-workflows-gitops` and `hybrid-workflows-infra` already exist next to this repo on your host, they will appear automatically in the container
+- if they do not exist yet, `post-install.sh` prints the exact `git clone` commands to create them
+- if you prefer automatic local cloning, set `AUTO_CLONE_SIBLINGS=true` in `.devcontainer/devcontainer.json` before rebuilding the container
+- if you want `kind` and `kubebuilder` baked into the image too, set `build.args.INSTALL_OPTIONAL_DEV_TOOLS=true` and rebuild
 
 ## Forking This Stack
 

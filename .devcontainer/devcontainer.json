@@ -1,6 +1,13 @@
 {
   "name": "Hybrid Workflows Operator",
-  "image": "mcr.microsoft.com/devcontainers/go:1.25-bookworm",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "VARIANT": "1.25-bookworm",
+      "INSTALL_OPTIONAL_DEV_TOOLS": "false"
+    }
+  },
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "moby": false,
@@ -16,10 +23,11 @@
     "--privileged",
     "--init"
   ],
+  "workspaceMount": "source=${localWorkspaceFolder}/..,target=/workspaces,type=bind",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "hostRequirements": {
     "cpus": 4,
-    "memory": "16gb",
-    "storage": "32gb"
+    "memory": "7gb"
   },
   "forwardPorts": [
     8080,
@@ -88,9 +96,15 @@
       ]
     }
   },
+  "containerEnv": {
+    "AUTO_CLONE_SIBLINGS": "true",
+    "GITOPS_REPO_URL": "https://github.com/PGpalt/hybrid-workflows-gitops.git",
+    "INFRA_REPO_URL": "https://github.com/PGpalt/hybrid-workflows-infra.git"
+  },
   "remoteEnv": {
     "GO111MODULE": "on",
     "AWS_PAGER": ""
   },
-  "onCreateCommand": "bash .devcontainer/post-install.sh"
+  "postCreateCommand": "bash .devcontainer/post-install.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh"
 }

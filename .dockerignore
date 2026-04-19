@@ -9,3 +9,7 @@
 # Re-include Go module files
 !go.mod
 !go.sum
+
+# Re-include devcontainer build files used by the local/Codespaces image.
+!.devcontainer/
+!.devcontainer/**

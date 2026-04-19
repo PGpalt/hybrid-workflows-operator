@@ -27,7 +27,7 @@
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "hostRequirements": {
     "cpus": 4,
-    "memory": "7gb"
+    "memory": "16gb"
   },
   "forwardPorts": [
     8080,
